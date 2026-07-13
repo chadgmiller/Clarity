@@ -113,15 +113,31 @@
 <body>
 <div id="app"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ============ STORAGE ============ */
-const STORE_KEY = 'clarity_state_v3';
-function loadState(){
-  const raw = localStorage.getItem(STORE_KEY);
-  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
-  return null;
+/* ============ STORAGE (Supabase) ============ */
+const SUPABASE_URL = 'https://gociihepdtycfmooikds.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_J70Xrv7eXx7PXPPIzMH_IQ_Ul1HdN0Y';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let authChecked = false;
+let saveTimer = null;
+
+async function loadStateFromServer(){
+  const { data, error } = await sb.from('app_state').select('state').eq('user_id', currentUser.id).maybeSingle();
+  if(error){ console.error('Failed to load state', error); }
+  state = (data && data.state && Object.keys(data.state).length) ? data.state : defaultState();
 }
-function saveState(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function saveState(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushState, 500);
+}
+async function flushState(){
+  if(!currentUser || !state) return;
+  const { error } = await sb.from('app_state').upsert({ user_id: currentUser.id, state, updated_at: new Date().toISOString() });
+  if(error) console.error('Failed to save state', error);
+}
 
 const AVATAR_EMOJIS = ['🎯','⚡','🚀','🧠','🔥','🦉','🦅','🐺','🌟','🎓','🧩','⭐'];
 
@@ -168,7 +184,7 @@ function defaultState(){
 }
 function uidSafe(){ return Math.random().toString(36).slice(2,10); }
 
-let state = loadState() || defaultState();
+let state = null;
 
 /* ============ UTIL ============ */
 function uid(){ return Math.random().toString(36).slice(2,10); }
@@ -254,6 +270,53 @@ function renderSetup(){
     state.setupDone = true;
     saveState();
     render();
+  };
+}
+
+/* ============ AUTH SCREEN ============ */
+function renderAuth(){
+  const app = document.getElementById('app');
+  const mode = window._authMode || 'signin';
+  app.innerHTML = `
+    <div class="setup-screen">
+      <h1>Welcome to Clarity</h1>
+      <p class="muted">Sign in to see your own routines, lists, and points.</p>
+      <div class="card">
+        <h3>${mode==='signin' ? 'Sign In' : 'Create Account'}</h3>
+        <input id="authEmail" type="email" placeholder="Email" style="width:80%;margin-bottom:8px;" autocomplete="username"><br>
+        <input id="authPassword" type="password" placeholder="Password" style="width:80%;" autocomplete="${mode==='signin'?'current-password':'new-password'}">
+        <div id="authError" class="small" style="color:var(--red);min-height:18px;margin-top:6px;"></div>
+        <div style="margin-top:14px;">
+          <button class="green" id="authSubmitBtn">${mode==='signin' ? 'Sign In' : 'Sign Up'}</button>
+        </div>
+        <p class="small muted" style="margin-top:14px;">
+          <a class="linklike" id="authToggle">${mode==='signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}</a>
+        </p>
+      </div>
+    </div>
+  `;
+  document.getElementById('authToggle').onclick = ()=>{
+    window._authMode = mode==='signin' ? 'signup' : 'signin';
+    renderAuth();
+  };
+  document.getElementById('authSubmitBtn').onclick = async ()=>{
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const errEl = document.getElementById('authError');
+    errEl.textContent = '';
+    if(!email || !password){ errEl.textContent = 'Enter an email and password.'; return; }
+    if(mode==='signin'){
+      const { error } = await sb.auth.signInWithPassword({email, password});
+      if(error){ errEl.textContent = error.message; }
+    } else {
+      const { data, error } = await sb.auth.signUp({email, password});
+      if(error){
+        errEl.textContent = error.message;
+      } else if(!data.session){
+        errEl.style.color = 'var(--green)';
+        errEl.textContent = 'Account created! Check your email to confirm it, then sign in.';
+      }
+    }
   };
 }
 
@@ -756,6 +819,11 @@ function renderSettings(){
     <h3>Reset</h3>
     <p class="small muted">This wipes all progress, routines, lists, quests, and points.</p>
     <button class="pink" id="resetAllBtn">Reset Everything</button>
+  </div>
+  <div class="card">
+    <h3>Account</h3>
+    <p class="small muted">Signed in as ${currentUser ? currentUser.email : ''}</p>
+    <button class="secondary" id="signOutBtn">Sign Out</button>
   </div>`;
   return html;
 }
@@ -841,6 +909,7 @@ function requestNotifPermission(){
   });
 }
 function checkReminders(){
+  if(!state || !currentUser) return;
   processRollover();
   if(!state.notifications.enabled) return;
   if(!('Notification' in window) || Notification.permission!=='granted') return;
@@ -882,6 +951,9 @@ setInterval(checkReminders, 20000);
 /* ============ MAIN RENDER ============ */
 function render(){
   const app = document.getElementById('app');
+  if(!authChecked){ app.innerHTML = `<div class="empty">Loading…</div>`; return; }
+  if(!currentUser){ renderAuth(); return; }
+  if(!state){ app.innerHTML = `<div class="empty">Loading your data…</div>`; return; }
   if(!state.setupDone){ renderSetup(); return; }
 
   let body = '';
@@ -1125,29 +1197,53 @@ function attachHandlers(){
   const resetAllBtn = document.getElementById('resetAllBtn');
   if(resetAllBtn) resetAllBtn.onclick = ()=>{
     if(confirm('Are you sure? This deletes everything.')){
-      localStorage.removeItem(STORE_KEY);
       state = defaultState();
+      saveState();
       currentTab='home';
       render();
     }
   };
+  const signOutBtn = document.getElementById('signOutBtn');
+  if(signOutBtn) signOutBtn.onclick = async ()=>{
+    clearTimeout(saveTimer);
+    await flushState();
+    await sb.auth.signOut();
+  };
 }
 
-processRollover();
-render();
-if(window._rolloverSummary){
-  const s = window._rolloverSummary;
-  let msg;
-  if(s.totalMissed===0){
-    msg = `Yesterday: +${s.totalEarned} pts — nice, nothing missed!`;
-  } else if(s.totalEarned===0){
-    msg = `No points lost yesterday, but nothing was completed either — fresh start today!`;
-  } else {
-    msg = `Yesterday: +${s.totalEarned} pts earned, -${Math.min(s.totalMissed,s.totalEarned)} pts for missed stuff → net +${s.totalNet}`;
+function showRolloverToast(){
+  if(window._rolloverSummary){
+    const s = window._rolloverSummary;
+    let msg;
+    if(s.totalMissed===0){
+      msg = `Yesterday: +${s.totalEarned} pts — nice, nothing missed!`;
+    } else if(s.totalEarned===0){
+      msg = `No points lost yesterday, but nothing was completed either — fresh start today!`;
+    } else {
+      msg = `Yesterday: +${s.totalEarned} pts earned, -${Math.min(s.totalMissed,s.totalEarned)} pts for missed stuff → net +${s.totalNet}`;
+    }
+    toast(msg);
+    window._rolloverSummary = null;
   }
-  toast(msg);
-  window._rolloverSummary = null;
 }
+
+sb.auth.onAuthStateChange((event, session)=>{
+  const wasSignedIn = !!currentUser;
+  currentUser = session ? session.user : null;
+  authChecked = true;
+  if(currentUser && !wasSignedIn){
+    loadStateFromServer().then(()=>{
+      processRollover();
+      render();
+      showRolloverToast();
+    });
+  } else {
+    if(!currentUser) state = null;
+    render();
+  }
+});
+
+render();
 </script>
 </body>
 </html>
