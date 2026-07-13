@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clarity</title>
+<style>
+  :root{
+    --bg1:#fef6ff; --bg2:#eaf6ff; --card:#ffffff; --ink:#33324a;
+    --pink:#ff6fa5; --purple:#9b6bff; --blue:#4fc3f7; --green:#3ecf8e;
+    --yellow:#ffc94d; --red:#ff6b6b; --shadow: 0 6px 18px rgba(60,40,90,0.12);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Baloo 2','Comic Sans MS',system-ui,-apple-system,sans-serif;
+    background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--ink); min-height:100vh;
+  }
+  #app{max-width:900px;margin:0 auto;padding:16px 16px 90px;}
+  h1,h2,h3{margin:0 0 8px;}
+  .card{background:var(--card);border-radius:20px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .between{justify-content:space-between;}
+  button{
+    font-family:inherit;border:none;border-radius:14px;padding:10px 16px;font-size:15px;
+    font-weight:700;cursor:pointer;background:var(--purple);color:white;transition:transform .1s;
+  }
+  button:active{transform:scale(0.95);}
+  button.secondary{background:#eee5ff;color:var(--purple);}
+  button.green{background:var(--green);}
+  button.pink{background:var(--pink);}
+  button.blue{background:var(--blue);}
+  button.ghost{background:transparent;color:var(--purple);border:2px solid var(--purple);}
+  button:disabled{opacity:0.45;cursor:not-allowed;}
+  input,select{
+    font-family:inherit;font-size:15px;padding:9px 12px;border-radius:12px;border:2px solid #e5defa;background:#fbfaff;
+  }
+  .pill{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px;}
+  .pill.xp{background:#fff2cc;color:#a9780b;}
+  .pill.coin{background:#fff2cc;color:#a9780b;}
+  .pill.streak{background:#ffe3e3;color:#c23a3a;}
+  .pill.rank{background:#eee5ff;color:var(--purple);}
+  header#topbar{
+    position:sticky;top:0;z-index:20;background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    padding-top:10px;padding-bottom:4px;
+  }
+  #navtabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;}
+  #navtabs button{white-space:nowrap;background:#f1ebff;color:var(--purple);flex:0 0 auto;}
+  #navtabs button.active{background:var(--purple);color:white;}
+  .profile-row{
+    display:flex;align-items:center;gap:14px;
+  }
+  .avatar-badge{
+    font-size:40px;width:64px;height:64px;border-radius:16px;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 30% 30%, #fff, #eee5ff);
+    box-shadow:inset 0 0 0 3px #ded0ff;
+  }
+  .bar-bg{background:#eee5f9;border-radius:999px;height:10px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--purple),var(--pink));transition:width .4s;}
+  .task-item{
+    display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#f8f6ff;margin-bottom:8px;
+  }
+  .task-item.done{background:#eafbf1;opacity:0.75;text-decoration:line-through;}
+  .task-item .chk{
+    width:26px;height:26px;border-radius:50%;border:3px solid var(--purple);background:white;cursor:pointer;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--purple);
+  }
+  .task-item.done .chk{background:var(--green);border-color:var(--green);color:white;}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;background:#fff2cc;color:#8a6100;padding:6px 12px;border-radius:999px;font-weight:700;font-size:13px;margin:2px;
+  }
+  .badge.locked{background:#eee;color:#999;}
+  .grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+  .mission-card{cursor:pointer;transition:transform .15s;}
+  .mission-card:hover{transform:translateY(-3px);}
+  .chip{
+    display:inline-block;padding:8px 14px;border-radius:12px;background:#f1ebff;color:var(--purple);font-weight:700;
+    cursor:pointer;margin:4px;border:2px solid transparent;
+  }
+  .chip.selected{background:var(--purple);color:white;}
+  .chip.disabled{opacity:0.35;cursor:not-allowed;}
+  .toast{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:white;
+    padding:12px 22px;border-radius:14px;z-index:100;box-shadow:var(--shadow);font-weight:700;
+    animation:toastIn .3s ease;
+  }
+  @keyframes toastIn{from{opacity:0;transform:translate(-50%,-14px);}to{opacity:1;transform:translate(-50%,0);}}
+  .muted{color:#8a869e;font-size:14px;}
+  .small{font-size:13px;}
+  .timeline{display:flex;flex-direction:column;gap:8px;}
+  .timeline .step{
+    display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:#f8f6ff;
+  }
+  .timeline .step.overdue{background:#ffe9e9;}
+  .timeline .step.today{background:#fff3d6;}
+  .day-select{display:flex;gap:6px;flex-wrap:wrap;}
+  .day-select .chip{padding:6px 10px;font-size:13px;}
+  .empty{padding:30px;text-align:center;color:#a49fc0;}
+  .list-name{font-weight:800;font-size:17px;}
+  .progress-mini{font-size:12px;color:#8a869e;}
+  a.linklike{color:var(--purple);cursor:pointer;font-weight:700;text-decoration:underline;}
+  .flex-fill{flex:1;}
+  .icon-btn{background:transparent;color:#b3aed6;font-size:18px;padding:4px 8px;}
+  .icon-btn:hover{color:var(--red);}
+  .setup-screen{max-width:480px;margin:40px auto;text-align:center;}
+  .avatar-pick{font-size:36px;padding:12px;border-radius:16px;background:#f8f6ff;cursor:pointer;border:3px solid transparent;}
+  .avatar-pick.selected{border-color:var(--purple);background:#eee5ff;}
+  footer.tip{font-size:13px;color:#9691ad;text-align:center;margin-top:20px;}
+  .reward-log{font-size:13px;color:#8a869e;margin-top:6px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============ STORAGE ============ */
+const STORE_KEY = 'clarity_state_v3';
+function loadState(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
+  return null;
+}
+function saveState(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+const AVATAR_EMOJIS = ['🎯','⚡','🚀','🧠','🔥','🦉','🦅','🐺','🌟','🎓','🧩','⭐'];
+
+const DEFAULT_REWARDS = [
+  {name:'30 extra minutes of screen time', cost:30},
+  {name:'Pick tonight\'s dinner', cost:25},
+  {name:'Skip one chore', cost:40},
+  {name:'Stay up 30 minutes late', cost:35},
+  {name:'$5 bonus allowance', cost:150},
+];
+
+const RANKS = [
+  {min:0, label:'Getting Started', emoji:'🌱'},
+  {min:50, label:'Bronze Planner', emoji:'🥉'},
+  {min:150, label:'Silver Planner', emoji:'🥈'},
+  {min:300, label:'Gold Planner', emoji:'🥇'},
+  {min:600, label:'Platinum Planner', emoji:'💎'},
+  {min:1000, label:'Master Planner', emoji:'🏆'},
+];
+
+// Points awarded for doing something match the points at stake for missing it.
+const POINTS = {
+  routineDone:8, routineMiss:8,
+  adhocDone:8, adhocMiss:8,
+  listItemDone:4, listMiss:6,
+  questStepDone:12, questStepMiss:12,
+};
+
+function defaultState(){
+  return {
+    setupDone:false,
+    profile:{name:'', avatar:'🎯'},
+    points:{balance:0, lifetime:0, lastProcessedDate:todayStr(), earnedByDate:{}},
+    missions:{ completed:{} },
+    routines:[],      // {id,name,icon,days:['Mon',...],time,streak,lastDoneDate}
+    lists:[],         // {id,name,items:[{id,name,checked}],lastReset}
+    quests:[],        // {id,name,eventDate,steps:[{id,name,dueOffsetDays,done}]}
+    adhoc:[],         // {id,name,date,time,done}
+    rewards: DEFAULT_REWARDS.map(r=>({id:uidSafe(), name:r.name, cost:r.cost})),
+    redeemedLog:[],   // {id,name,cost,date}
+    notifications:{enabled:false, lastCheckedMinute:''},
+    notifiedToday:{}  // key -> date string, to avoid repeat notifications
+  };
+}
+function uidSafe(){ return Math.random().toString(36).slice(2,10); }
+
+let state = loadState() || defaultState();
+
+/* ============ UTIL ============ */
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function todayStr(d=new Date()){
+  // Local calendar date, not UTC — avoids day-shift bugs for timezones ahead of UTC.
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function dayName(d=new Date()){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]; }
+function fmtDate(dstr){
+  const d = new Date(dstr+'T00:00:00');
+  return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+}
+function daysUntil(dstr){
+  const d = new Date(dstr+'T00:00:00');
+  const now = new Date(); now.setHours(0,0,0,0);
+  return Math.round((d-now)/86400000);
+}
+function addPoints(n){
+  state.points.balance += n;
+  state.points.lifetime += n;
+  const t = todayStr();
+  state.points.earnedByDate = state.points.earnedByDate || {};
+  state.points.earnedByDate[t] = (state.points.earnedByDate[t]||0) + n;
+  saveState();
+}
+function pointsEarnedToday(){
+  return (state.points.earnedByDate && state.points.earnedByDate[todayStr()]) || 0;
+}
+function currentRank(){
+  let r = RANKS[0];
+  RANKS.forEach(x=>{ if(state.points.lifetime>=x.min) r=x; });
+  return r;
+}
+function nextRank(){
+  return RANKS.find(x=>x.min>state.points.lifetime) || null;
+}
+function toast(msg){
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2400);
+}
+function celebrate(msg, points=0){
+  if(points) addPoints(points);
+  toast('🎉 '+msg+(points? ` +${points} pts`:''));
+}
+
+/* ============ ROUTER ============ */
+let currentTab = 'home';
+function setTab(t){ currentTab = t; render(); }
+
+/* ============ SETUP SCREEN ============ */
+function renderSetup(){
+  const app = document.getElementById('app');
+  let chosen = window._chosenAvatar || AVATAR_EMOJIS[0];
+  app.innerHTML = `
+    <div class="setup-screen">
+      <h1>Welcome to Clarity</h1>
+      <p class="muted">Earn points for planning ahead, remembering your stuff, and following through. Trade points in for real rewards later.</p>
+      <div class="card">
+        <h3>Choose your icon</h3>
+        <div class="row" style="justify-content:center;" id="avatarPicks">
+          ${AVATAR_EMOJIS.map(p=>`<div class="avatar-pick ${p===chosen?'selected':''}" data-avatar="${p}">${p}</div>`).join('')}
+        </div>
+        <h3 style="margin-top:18px;">Your name</h3>
+        <input id="nameInput" placeholder="e.g. Maya" style="width:80%;text-align:center;font-size:18px;">
+        <div style="margin-top:20px;">
+          <button class="green" id="startBtn">Get Started</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.querySelectorAll('#avatarPicks .avatar-pick').forEach(el=>{
+    el.onclick = ()=>{ window._chosenAvatar = el.dataset.avatar; renderSetup(); };
+  });
+  document.getElementById('startBtn').onclick = ()=>{
+    const name = document.getElementById('nameInput').value.trim() || 'Planner';
+    state.profile.name = name;
+    state.profile.avatar = window._chosenAvatar || AVATAR_EMOJIS[0];
+    state.setupDone = true;
+    saveState();
+    render();
+  };
+}
+
+/* ============ SHARED: TOP BAR / NAV ============ */
+function topBar(){
+  const rank = currentRank();
+  const next = nextRank();
+  const progressPct = next ? Math.max(0, Math.min(100, Math.round(((state.points.lifetime-rank.min)/(next.min-rank.min))*100))) : 100;
+  const tabs = [
+    ['home','🏠 Today'],
+    ['missions','🎮 Practice'],
+    ['routines','🔁 Routines'],
+    ['lists','🎒 Lists'],
+    ['quests','🗓️ Quests'],
+    ['rewards','🎁 Rewards'],
+    ['settings','⚙️ Settings'],
+  ];
+  return `
+  <header id="topbar">
+    <div class="card" style="margin-bottom:10px;">
+      <div class="row between">
+        <div class="profile-row">
+          <div class="avatar-badge">${state.profile.avatar}</div>
+          <div>
+            <div style="font-weight:800;font-size:18px;">${state.profile.name}</div>
+            <span class="pill rank">${rank.emoji} ${rank.label}</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <span class="pill coin">🪙 ${state.points.balance} pts</span>
+          <div class="bar-bg" style="width:150px;margin-top:6px;"><div class="bar-fill" style="width:${progressPct}%"></div></div>
+          <div class="muted small">${next? `${next.min-state.points.lifetime} to ${next.emoji} ${next.label}` : 'Top rank reached!'}</div>
+        </div>
+      </div>
+    </div>
+    <div id="navtabs">
+      ${tabs.map(([id,label])=>`<button class="${currentTab===id?'active':'secondary'}" data-tab="${id}">${label}</button>`).join('')}
+    </div>
+  </header>
+  `;
+}
+
+/* ============ HOME / TODAY ============ */
+function getTodayRoutines(){
+  const today = dayName();
+  return state.routines.filter(r=> r.days.includes(today) );
+}
+function isRoutineDoneToday(r){ return r.lastDoneDate === todayStr(); }
+
+function getTodayAdhoc(){
+  const t = todayStr();
+  return state.adhoc.filter(a => a.date === t || (a.date < t && !a.done));
+}
+
+function getUpcomingQuestSteps(){
+  const out = [];
+  state.quests.forEach(q=>{
+    q.steps.forEach(s=>{
+      if(s.done) return;
+      const due = new Date(q.eventDate+'T00:00:00');
+      due.setDate(due.getDate()-s.dueOffsetDays);
+      const dueStr = todayStr(due);
+      const diff = daysUntil(dueStr);
+      if(diff<=1){ out.push({quest:q, step:s, dueStr, diff}); }
+    });
+  });
+  return out.sort((a,b)=>a.diff-b.diff);
+}
+
+function renderHome(){
+  maybeResetListsForNewDay();
+  const routines = getTodayRoutines();
+  const adhoc = getTodayAdhoc();
+  const questSteps = getUpcomingQuestSteps();
+  const pendingListItems = [];
+  state.lists.forEach(l=>{
+    l.items.forEach(it=>{ if(!it.checked) pendingListItems.push({list:l,item:it}); });
+  });
+
+  const totalToday = routines.length + adhoc.length + questSteps.length + pendingListItems.length;
+
+  let html = `<h2>Today, ${fmtDate(todayStr())}</h2>`;
+  html += `<p class="muted small">Earned today: <b>${pointsEarnedToday()} pts</b>. Anything left undone by tonight trims a little off today's total — never from what you've already banked.</p>`;
+
+  if(totalToday===0){
+    html += `<div class="card empty">Nothing planned yet. Add a routine, list, or quest below to start earning points.</div>`;
+  }
+
+  if(adhoc.length){
+    html += `<div class="card"><h3>📌 Don't forget</h3>`;
+    adhoc.forEach(a=>{
+      html += `<div class="task-item ${a.done?'done':''}">
+        <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
+        <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+        <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
+      </div>`;
+    });
+    html += `<div class="row" style="margin-top:8px;">
+      <input id="newAdhoc" placeholder="Add a quick reminder (e.g. Bring shoes)" style="flex:1;min-width:180px;">
+      <input type="date" id="newAdhocDate" value="${todayStr()}">
+      <button id="addAdhocBtn">Add</button>
+    </div></div>`;
+  } else {
+    html += `<div class="card"><h3>📌 Don't forget</h3>
+      <div class="row">
+        <input id="newAdhoc" placeholder="Add a quick reminder (e.g. Bring shoes)" style="flex:1;min-width:180px;">
+        <input type="date" id="newAdhocDate" value="${todayStr()}">
+        <button id="addAdhocBtn">Add</button>
+      </div></div>`;
+  }
+
+  if(routines.length){
+    html += `<div class="card"><h3>🔁 Today's Routines</h3>`;
+    routines.forEach(r=>{
+      const done = isRoutineDoneToday(r);
+      html += `<div class="task-item ${done?'done':''}">
+        <div class="chk" data-routine="${r.id}">${done?'✓':''}</div>
+        <div class="flex-fill">${r.icon} ${r.name} ${r.streak>0?`<span class="pill streak">🔥 ${r.streak}</span>`:''}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if(pendingListItems.length){
+    html += `<div class="card"><h3>🎒 Pack &amp; Check</h3>`;
+    const byList = {};
+    pendingListItems.forEach(({list,item})=>{ (byList[list.id]=byList[list.id]||{list,items:[]}).items.push(item); });
+    Object.values(byList).forEach(({list,items})=>{
+      html += `<div class="small muted" style="margin:6px 0 2px;font-weight:700;">${list.name}</div>`;
+      items.forEach(item=>{
+        html += `<div class="task-item">
+          <div class="chk" data-listitem="${list.id}:${item.id}"></div>
+          <div class="flex-fill">${item.name}</div>
+        </div>`;
+      });
+    });
+    html += `</div>`;
+  }
+
+  if(questSteps.length){
+    html += `<div class="card"><h3>🗓️ Quest Steps Due</h3>`;
+    questSteps.forEach(({quest,step,dueStr,diff})=>{
+      const cls = diff<0?'overdue':(diff===0?'today':'');
+      html += `<div class="timeline"><div class="step ${cls}">
+        <div class="chk" data-queststep="${quest.id}:${step.id}"></div>
+        <div class="flex-fill"><b>${quest.name}</b>: ${step.name} <span class="muted small">(${diff<0?'overdue':diff===0?'today':'tomorrow'})</span></div>
+      </div></div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<footer class="tip">💡 Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`;
+  return html;
+}
+
+function maybeResetListsForNewDay(){
+  const t = todayStr();
+  state.lists.forEach(l=>{
+    if(l.lastReset !== t){
+      l.items.forEach(it=>it.checked=false);
+      l.lastReset = t;
+    }
+  });
+  saveState();
+}
+
+/* ============ MISSIONS (LEVEL 1) ============ */
+const MISSIONS = [
+  {
+    id:'camp', title:'Pack for Overnight Camping', badge:'Packing Pro', emoji:'🏕️',
+    desc:'You have a 6-slot backpack. Pick only what you really need!',
+  },
+  {
+    id:'movie', title:'Movie Night Sequencer', badge:'Sequencer', emoji:'🎬',
+    desc:'Put the steps of planning a movie night in the right order.',
+  },
+  {
+    id:'clock', title:'Beat the Clock', badge:'Time Wizard', emoji:'⏰',
+    desc:'You only have 45 minutes before school. Choose what fits!',
+  },
+  {
+    id:'party', title:'Plan-a-Party Countdown', badge:'Event Planner', emoji:'🎉',
+    desc:'The party is in 10 days. Decide when to do each task.',
+  },
+];
+
+function renderMissions(){
+  let html = `<h2>🎮 Practice Missions</h2><p class="muted">Low-stakes games to build your planning brain. No real deadlines here!</p>`;
+  html += `<div class="grid-cards">`;
+  MISSIONS.forEach(m=>{
+    const done = state.missions.completed[m.id];
+    html += `<div class="card mission-card" data-mission="${m.id}">
+      <div style="font-size:40px;">${m.emoji}</div>
+      <h3>${m.title}</h3>
+      <p class="small muted">${m.desc}</p>
+      ${done? `<span class="badge">🏅 ${m.badge} earned!</span>` : `<span class="badge locked">🔒 ${m.badge}</span>`}
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+/* ---- Mission play state ---- */
+let missionState = null;
+
+function startMission(id){
+  if(id==='camp'){
+    missionState = {id, packed:[], done:false};
+  } else if(id==='movie'){
+    const steps = ['Decide who to invite','Pick a movie','Send invites','Buy snacks','Clean up the living room'];
+    const correctOrder = steps.slice();
+    missionState = {id, shuffled: shuffle(steps.slice()), picked:[], correctOrder, done:false};
+  } else if(id==='clock'){
+    missionState = {id, must:['Brush teeth (5m)','Get dressed (7m)','Eat breakfast (12m)'], optional:[
+      {name:'Play video games (20m)', min:20}, {name:'Watch a show (15m)', min:15},
+      {name:'Find backpack + shoes (6m)', min:6}, {name:'Pack lunch (8m)', min:8}
+    ], selected:[], done:false};
+  } else if(id==='party'){
+    missionState = {id, tasks:[
+      {name:'Pick out a gift', assigned:null, ideal:5},
+      {name:'Wrap the gift', assigned:null, ideal:1},
+      {name:'Make a card', assigned:null, ideal:2},
+      {name:'Ask parents for a ride', assigned:null, ideal:4},
+      {name:'Double check time & address', assigned:null, ideal:0},
+    ], done:false};
+  }
+  currentTab = 'missionPlay';
+  render();
+}
+function shuffle(arr){ for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+
+const CAMP_ITEMS = [
+  {name:'Tent', need:true}, {name:'Flashlight', need:true}, {name:'Sleeping bag', need:true},
+  {name:'Bug spray', need:true}, {name:'Water bottle', need:true}, {name:'Extra socks', need:true},
+  {name:'Television', need:false}, {name:'Piano', need:false}, {name:'Fish tank', need:false},
+  {name:'Desktop computer', need:false}, {name:'Bowling ball', need:false}, {name:'Umbrella stand', need:false},
+];
+
+function renderMissionPlay(){
+  if(!missionState) return `<div class="empty">No mission active.</div>`;
+  const m = MISSIONS.find(x=>x.id===missionState.id);
+  let inner = '';
+
+  if(missionState.id==='camp'){
+    inner = `<p>Tap up to 6 items to pack. Chosen: ${missionState.packed.length}/6</p>
+      <div class="row">${CAMP_ITEMS.map(it=>{
+        const sel = missionState.packed.includes(it.name);
+        const disabled = !sel && missionState.packed.length>=6;
+        return `<span class="chip ${sel?'selected':''} ${disabled?'disabled':''}" data-camp-item="${it.name}">${it.name}</span>`;
+      }).join('')}</div>
+      <div style="margin-top:16px;"><button class="green" id="checkCamp" ${missionState.packed.length===0?'disabled':''}>Zip it up!</button></div>`;
+    if(missionState.done){
+      const correct = missionState.packed.filter(n=>CAMP_ITEMS.find(i=>i.name===n).need).length;
+      const junk = missionState.packed.filter(n=>!CAMP_ITEMS.find(i=>i.name===n).need).length;
+      const missedNeeded = CAMP_ITEMS.filter(i=>i.need && !missionState.packed.includes(i.name)).length;
+      inner += `<div class="card" style="margin-top:14px;background:#f3fff7;">
+        <p>You packed <b>${correct}</b> good items${junk?`, but also ${junk} things you didn't need`:''}${missedNeeded?`, and missed ${missedNeeded} useful item(s)`:''}.</p>
+        <p class="small muted">💡 Real tip: before any trip, list what you'll actually use — not everything you own!</p>
+      </div>`;
+    }
+  }
+
+  if(missionState.id==='movie'){
+    inner = `<p>Tap the steps in the order they should happen:</p>
+      <div class="row">${missionState.shuffled.map(s=>{
+        const idx = missionState.picked.indexOf(s);
+        return `<span class="chip ${idx>=0?'selected':''}" data-movie-step="${s}">${idx>=0?(idx+1)+'. ':''}${s}</span>`;
+      }).join('')}</div>
+      <div style="margin-top:16px;"><button class="green" id="checkMovie" ${missionState.picked.length<missionState.correctOrder.length?'disabled':''}>Check Order</button>
+      <button class="secondary" id="resetMovie">Reset</button></div>`;
+    if(missionState.done){
+      const numCorrect = missionState.picked.filter((s,i)=>s===missionState.correctOrder[i]).length;
+      inner += `<div class="card" style="margin-top:14px;background:#f3fff7;">
+        <p>${numCorrect}/${missionState.correctOrder.length} in the right spot!</p>
+        <p class="small">Best order: ${missionState.correctOrder.map((s,i)=>`${i+1}. ${s}`).join(' → ')}</p>
+      </div>`;
+    }
+  }
+
+  if(missionState.id==='clock'){
+    inner = `<p>You have <b>45 minutes</b>. Must-do's are locked in: brush teeth, get dressed, eat breakfast (24 min total).</p>
+      <p>Pick which extra things fit in the ${45-24} minutes left:</p>
+      <div class="row">${missionState.optional.map(o=>{
+        const sel = missionState.selected.includes(o.name);
+        return `<span class="chip ${sel?'selected':''}" data-clock-item="${o.name}">${o.name}</span>`;
+      }).join('')}</div>
+      <p class="small muted">Selected time: ${missionState.selected.reduce((sum,n)=>sum+missionState.optional.find(o=>o.name===n).min,0)} / ${45-24} min</p>
+      <div style="margin-top:16px;"><button class="green" id="checkClock">Check My Morning</button></div>`;
+    if(missionState.done){
+      const total = missionState.selected.reduce((sum,n)=>sum+missionState.optional.find(o=>o.name===n).min,0);
+      const ok = total<=(45-24);
+      inner += `<div class="card" style="margin-top:14px;background:${ok?'#f3fff7':'#fff3f3'};">
+        <p>${ok? '🎉 You made it out the door on time!' : '⏰ You would have been running late! Too much packed in.'}</p>
+        <p class="small muted">💡 Real tip: always leave buffer time — mornings never go exactly as planned.</p>
+      </div>`;
+    }
+  }
+
+  if(missionState.id==='party'){
+    const options = [0,1,2,3,4,5,7,10];
+    inner = `<p>The party is in <b>10 days</b>. When should you do each task? (days before the party)</p>`;
+    missionState.tasks.forEach((t,i)=>{
+      inner += `<div class="task-item"><div class="flex-fill">${t.name}</div>
+        <select data-party-task="${i}">
+          <option value="">-- pick --</option>
+          ${options.map(o=>`<option value="${o}" ${t.assigned===o?'selected':''}>${o===0?'Day of':o+' day(s) before'}</option>`).join('')}
+        </select>
+      </div>`;
+    });
+    inner += `<div style="margin-top:16px;"><button class="green" id="checkParty">Check My Plan</button></div>`;
+    if(missionState.done){
+      let goodCount = 0;
+      missionState.tasks.forEach(t=>{ if(t.assigned!==null && t.assigned>=t.ideal) goodCount++; });
+      inner += `<div class="card" style="margin-top:14px;background:#f3fff7;">
+        <p>${goodCount}/${missionState.tasks.length} tasks were given enough lead time.</p>
+        <p class="small muted">💡 Real tip: gifts & rides need days of notice — cards & double-checking can wait til closer to the day.</p>
+      </div>`;
+    }
+  }
+
+  return `<button class="secondary" id="backToMissions">← Back to Missions</button>
+    <div class="card"><h2>${m.emoji} ${m.title}</h2>${inner}
+    ${missionState.done? `<div style="margin-top:10px;"><button id="claimMission">Claim Points 🎁</button></div>`:''}
+    </div>`;
+}
+
+function finishMission(){
+  missionState.done = true;
+  render();
+}
+
+function claimMissionReward(){
+  const id = missionState.id;
+  if(!state.missions.completed[id]){
+    state.missions.completed[id] = true;
+    saveState();
+    celebrate('New badge earned!', 35);
+  } else {
+    celebrate('Nice replay!', 8);
+  }
+  currentTab='missions'; missionState=null; render();
+}
+
+/* ============ ROUTINES ============ */
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+function renderRoutines(){
+  let html = `<h2>🔁 My Routines</h2><p class="muted">Things you do again and again — practice, medicine, chores.</p>`;
+  if(state.routines.length===0){ html += `<div class="card empty">No routines yet. Add your first one below!</div>`; }
+  state.routines.forEach(r=>{
+    html += `<div class="card">
+      <div class="row between">
+        <div><b>${r.icon} ${r.name}</b> <span class="muted small">(${r.days.join(', ')}${r.time?', '+r.time:''})</span></div>
+        <div class="row">
+          <span class="pill streak">🔥 ${r.streak} day streak</span>
+          <button class="icon-btn" data-del-routine="${r.id}">✕</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += `<div class="card">
+    <h3>Add a routine</h3>
+    <div class="row">
+      <input id="rIcon" placeholder="emoji" style="width:70px;" value="⭐">
+      <input id="rName" placeholder="e.g. Piano practice" style="flex:1;min-width:160px;">
+      <input id="rTime" type="time">
+    </div>
+    <div class="day-select" style="margin-top:10px;" id="rDays">
+      ${DAYS.map(d=>`<span class="chip" data-day="${d}">${d}</span>`).join('')}
+    </div>
+    <div style="margin-top:10px;"><button id="addRoutineBtn">Add Routine</button></div>
+  </div>`;
+  return html;
+}
+
+/* ============ LISTS ============ */
+function renderLists(){
+  let html = `<h2>🎒 My Lists</h2><p class="muted">Reusable checklists that reset each day — school bag, sports bag, sleepover bag...</p>`;
+  if(state.lists.length===0){ html += `<div class="card empty">No lists yet. Create one below!</div>`; }
+  state.lists.forEach(l=>{
+    const doneCount = l.items.filter(i=>i.checked).length;
+    html += `<div class="card">
+      <div class="row between">
+        <div class="list-name">${l.name}</div>
+        <button class="icon-btn" data-del-list="${l.id}">✕</button>
+      </div>
+      <div class="progress-mini">${doneCount}/${l.items.length} checked today</div>`;
+    l.items.forEach(it=>{
+      html += `<div class="task-item ${it.checked?'done':''}">
+        <div class="chk" data-listitem="${l.id}:${it.id}">${it.checked?'✓':''}</div>
+        <div class="flex-fill">${it.name}</div>
+        <button class="icon-btn" data-del-item="${l.id}:${it.id}">✕</button>
+      </div>`;
+    });
+    html += `<div class="row">
+      <input placeholder="Add item..." data-newitem-for="${l.id}" style="flex:1;">
+      <button data-addlistitem="${l.id}">Add</button>
+    </div></div>`;
+  });
+  html += `<div class="card">
+    <h3>Create a new list</h3>
+    <div class="row"><input id="newListName" placeholder="e.g. Basketball Bag" style="flex:1;">
+    <button id="addListBtn">Create</button></div>
+  </div>`;
+  return html;
+}
+
+/* ============ QUESTS (events) ============ */
+const QUEST_TEMPLATE = [
+  {name:'Think of / buy a gift', offset:5},
+  {name:'Wrap the gift', offset:1},
+  {name:'Make or sign a card', offset:2},
+  {name:'Arrange a ride there', offset:4},
+  {name:'Double-check time & address', offset:0},
+];
+function renderQuests(){
+  let html = `<h2>🗓️ My Quests</h2><p class="muted">Big one-time things — birthday parties, projects, trips.</p>`;
+  if(state.quests.length===0){ html += `<div class="card empty">No quests yet. Start one below!</div>`; }
+  state.quests.forEach(q=>{
+    const doneCount = q.steps.filter(s=>s.done).length;
+    const diff = daysUntil(q.eventDate);
+    html += `<div class="card">
+      <div class="row between">
+        <div><b>${q.name}</b> <span class="muted small">(${fmtDate(q.eventDate)}, ${diff===0?'today!':diff+' day(s) away'})</span></div>
+        <button class="icon-btn" data-del-quest="${q.id}">✕</button>
+      </div>
+      <div class="progress-mini">${doneCount}/${q.steps.length} steps done</div>
+      <div class="timeline">`;
+    q.steps.forEach(s=>{
+      const due = new Date(q.eventDate+'T00:00:00'); due.setDate(due.getDate()-s.dueOffsetDays);
+      const dueStr = todayStr(due);
+      const stepDiff = daysUntil(dueStr);
+      const cls = s.done? '' : (stepDiff<0?'overdue':(stepDiff===0?'today':''));
+      html += `<div class="step ${cls}">
+        <div class="chk" data-queststep="${q.id}:${s.id}">${s.done?'✓':''}</div>
+        <div class="flex-fill">${s.name} <span class="muted small">(due ${fmtDate(dueStr)})</span></div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `<div class="card">
+    <h3>Start a new quest</h3>
+    <div class="row">
+      <input id="questName" placeholder="e.g. Maya's Birthday Party" style="flex:1;min-width:180px;">
+      <input id="questDate" type="date">
+    </div>
+    <p class="small muted">We'll suggest a step timeline — you can edit steps after creating it.</p>
+    <div style="margin-top:10px;"><button id="addQuestBtn">Create Quest</button></div>
+  </div>`;
+  return html;
+}
+
+/* ============ REWARDS (trade-up) ============ */
+function renderRewards(){
+  let html = `<h2>🎁 Rewards</h2><p class="muted">Trade in your points for real rewards. Balance: <b>${state.points.balance} pts</b>.</p>`;
+  html += `<div class="grid-cards">`;
+  state.rewards.forEach(r=>{
+    const canAfford = state.points.balance >= r.cost;
+    html += `<div class="card" style="text-align:center;">
+      <h3>${r.name}</h3>
+      <p class="small muted">🪙 ${r.cost} pts</p>
+      <div class="row" style="justify-content:center;">
+        <button data-redeem="${r.id}" ${canAfford?'':'disabled'}>Trade In</button>
+        <button class="icon-btn" data-del-reward="${r.id}">✕</button>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  html += `<div class="card">
+    <h3>Add a custom reward</h3>
+    <div class="row">
+      <input id="newRewardName" placeholder="e.g. Choose the weekend outing" style="flex:1;min-width:180px;">
+      <input id="newRewardCost" type="number" min="1" placeholder="Cost in pts" style="width:120px;">
+      <button id="addRewardBtn">Add</button>
+    </div>
+  </div>`;
+  if(state.redeemedLog.length){
+    html += `<div class="card"><h3>Trade-in History</h3>`;
+    state.redeemedLog.slice().reverse().slice(0,8).forEach(l=>{
+      html += `<div class="reward-log">${fmtDate(l.date)} — ${l.name} (${l.cost} pts)</div>`;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+/* ============ SETTINGS ============ */
+function renderSettings(){
+  const notifOn = state.notifications.enabled;
+  let html = `<h2>⚙️ Settings</h2>
+  <div class="card">
+    <h3>How points & penalties work</h3>
+    <p class="small muted">Completing a routine, reminder, quest step, or finishing a list earns points right away. If something scheduled for today is still undone by tonight, it trims a matching number of points off <b>today's</b> total — but only up to what was earned today. Points and rank from previous days are never taken away, and a rough day just nets to zero rather than going negative.</p>
+  </div>
+  <div class="card">
+    <h3>Reminders</h3>
+    <p class="small muted">Turn on notifications so Clarity can pop up reminders for routines, lists, and quest steps — even if you're doing something else. Keep this browser tab open for reminders to work.</p>
+    <button id="toggleNotif" class="${notifOn?'green':''}">${notifOn? '🔔 Reminders On' : 'Turn On Reminders'}</button>
+  </div>
+  <div class="card">
+    <h3>Reset</h3>
+    <p class="small muted">This wipes all progress, routines, lists, quests, and points.</p>
+    <button class="pink" id="resetAllBtn">Reset Everything</button>
+  </div>`;
+  return html;
+}
+
+/* ============ DAILY ROLLOVER (misses & netting) ============ */
+// When a day ends, anything scheduled for it that wasn't done gets a deduction —
+// but the deduction is capped at what was actually earned that same day, so a bad
+// day nets to zero at worst and never eats into points already banked.
+function questStepDueStr(q,s){
+  const due = new Date(q.eventDate+'T00:00:00');
+  due.setDate(due.getDate()-s.dueOffsetDays);
+  return todayStr(due);
+}
+function processDayMisses(dStr){
+  let missed = 0;
+  const wname = dayName(new Date(dStr+'T00:00:00'));
+
+  state.routines.forEach(r=>{
+    if(r.days.includes(wname) && r.lastDoneDate!==dStr){
+      missed += POINTS.routineMiss;
+      r.streak = 0;
+    }
+  });
+  state.adhoc.forEach(a=>{
+    if(a.date===dStr && !a.done && !a.penalized){
+      missed += POINTS.adhocMiss;
+      a.penalized = true;
+    }
+  });
+  state.quests.forEach(q=>{
+    q.steps.forEach(s=>{
+      if(!s.done && !s.penalized && questStepDueStr(q,s)===dStr){
+        missed += POINTS.questStepMiss;
+        s.penalized = true;
+      }
+    });
+  });
+  state.lists.forEach(l=>{
+    if(l.lastReset===dStr && l.items.some(it=>!it.checked)){
+      missed += POINTS.listMiss;
+    }
+  });
+
+  const earned = (state.points.earnedByDate && state.points.earnedByDate[dStr]) || 0;
+  const applied = Math.min(missed, earned);
+  if(applied>0){
+    state.points.balance -= applied;
+    state.points.lifetime -= applied;
+    if(state.points.balance<0) state.points.balance=0;
+    if(state.points.lifetime<0) state.points.lifetime=0;
+  }
+  if(state.points.earnedByDate) delete state.points.earnedByDate[dStr];
+  return {earned, missed, net: earned-applied};
+}
+function processRollover(){
+  const today = todayStr();
+  if(!state.points.lastProcessedDate){ state.points.lastProcessedDate = today; saveState(); return; }
+  if(state.points.lastProcessedDate === today) return;
+  let d = new Date(state.points.lastProcessedDate+'T00:00:00');
+  const endDate = new Date(today+'T00:00:00');
+  let totalEarned=0, totalMissed=0, totalNet=0, daysProcessed=0;
+  while(d < endDate){
+    const dStr = todayStr(d);
+    const r = processDayMisses(dStr);
+    totalEarned+=r.earned; totalMissed+=r.missed; totalNet+=r.net; daysProcessed++;
+    d.setDate(d.getDate()+1);
+  }
+  state.points.lastProcessedDate = today;
+  saveState();
+  if(daysProcessed>0 && (totalEarned>0 || totalMissed>0)){
+    window._rolloverSummary = {totalEarned, totalMissed, totalNet};
+  }
+}
+
+/* ============ NOTIFICATIONS ============ */
+function requestNotifPermission(){
+  if(!('Notification' in window)){ toast('Notifications not supported in this browser'); return; }
+  Notification.requestPermission().then(p=>{
+    state.notifications.enabled = (p==='granted');
+    saveState();
+    render();
+    if(p==='granted'){ new Notification('Clarity', {body: 'Reminders are on — you will see them here.'}); }
+  });
+}
+function checkReminders(){
+  processRollover();
+  if(!state.notifications.enabled) return;
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const now = new Date();
+  const hm = now.toTimeString().slice(0,5);
+  const t = todayStr();
+
+  state.routines.forEach(r=>{
+    if(!r.time) return;
+    if(!r.days.includes(dayName())) return;
+    const key = 'routine_'+r.id+'_'+t;
+    if(r.time===hm && !state.notifiedToday[key] && !isRoutineDoneToday(r)){
+      new Notification('Clarity reminder 🔁', {body: `Time for: ${r.name}`});
+      state.notifiedToday[key]=true; saveState();
+    }
+  });
+  state.adhoc.forEach(a=>{
+    if(a.done || a.date!==t || !a.time) return;
+    const key = 'adhoc_'+a.id;
+    if(a.time===hm && !state.notifiedToday[key]){
+      new Notification('Clarity reminder 📌', {body: a.name});
+      state.notifiedToday[key]=true; saveState();
+    }
+  });
+  // once-daily 8am nudge for overdue quest steps
+  if(hm==='08:00'){
+    const key = 'questnudge_'+t;
+    if(!state.notifiedToday[key]){
+      const steps = getUpcomingQuestSteps();
+      if(steps.length){
+        new Notification('Clarity 🗓️', {body: `You have ${steps.length} quest step(s) due today!`});
+      }
+      state.notifiedToday[key]=true; saveState();
+    }
+  }
+}
+setInterval(checkReminders, 20000);
+
+/* ============ MAIN RENDER ============ */
+function render(){
+  const app = document.getElementById('app');
+  if(!state.setupDone){ renderSetup(); return; }
+
+  let body = '';
+  if(currentTab==='home') body = renderHome();
+  else if(currentTab==='missions') body = renderMissions();
+  else if(currentTab==='missionPlay') body = renderMissionPlay();
+  else if(currentTab==='routines') body = renderRoutines();
+  else if(currentTab==='lists') body = renderLists();
+  else if(currentTab==='quests') body = renderQuests();
+  else if(currentTab==='rewards') body = renderRewards();
+  else if(currentTab==='settings') body = renderSettings();
+
+  app.innerHTML = topBar() + body;
+  attachHandlers();
+}
+
+/* ============ EVENT HANDLERS ============ */
+function attachHandlers(){
+  document.querySelectorAll('#navtabs [data-tab]').forEach(b=>{
+    b.onclick = ()=> setTab(b.dataset.tab);
+  });
+
+  // HOME: adhoc
+  const addAdhocBtn = document.getElementById('addAdhocBtn');
+  if(addAdhocBtn) addAdhocBtn.onclick = ()=>{
+    const name = document.getElementById('newAdhoc').value.trim();
+    const date = document.getElementById('newAdhocDate').value || todayStr();
+    if(!name) return;
+    state.adhoc.push({id:uid(), name, date, time:null, done:false, penalized:false});
+    saveState(); render();
+  };
+  document.querySelectorAll('[data-adhoc]').forEach(el=>{
+    el.onclick = ()=>{
+      const a = state.adhoc.find(x=>x.id===el.dataset.adhoc);
+      a.done = !a.done;
+      saveState();
+      if(a.done) celebrate('Remembered it!', 8);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-adhoc]').forEach(el=>{
+    el.onclick = ()=>{ state.adhoc = state.adhoc.filter(x=>x.id!==el.dataset.delAdhoc); saveState(); render(); };
+  });
+
+  // HOME/ROUTINES: routine checkbox
+  document.querySelectorAll('[data-routine]').forEach(el=>{
+    el.onclick = ()=>{
+      const r = state.routines.find(x=>x.id===el.dataset.routine);
+      const t = todayStr();
+      if(r.lastDoneDate===t){
+        r.lastDoneDate=null; r.streak = Math.max(0,r.streak-1);
+      } else {
+        r.lastDoneDate = t; r.streak = (r.streak||0)+1;
+        celebrate(`${r.name} done!`, 8);
+      }
+      saveState(); render();
+    };
+  });
+
+  // ROUTINES: add
+  const addRoutineBtn = document.getElementById('addRoutineBtn');
+  if(addRoutineBtn) addRoutineBtn.onclick = ()=>{
+    const icon = document.getElementById('rIcon').value.trim() || '⭐';
+    const name = document.getElementById('rName').value.trim();
+    const time = document.getElementById('rTime').value || null;
+    const days = Array.from(document.querySelectorAll('#rDays .chip.selected')).map(c=>c.dataset.day);
+    if(!name || days.length===0){ toast('Add a name and pick at least one day'); return; }
+    state.routines.push({id:uid(), name, icon, time, days, streak:0, lastDoneDate:null});
+    saveState(); render();
+  };
+  document.querySelectorAll('#rDays .chip').forEach(c=>{
+    c.onclick = ()=>{ c.classList.toggle('selected'); };
+  });
+  document.querySelectorAll('[data-del-routine]').forEach(el=>{
+    el.onclick = ()=>{ state.routines = state.routines.filter(x=>x.id!==el.dataset.delRoutine); saveState(); render(); };
+  });
+
+  // LISTS
+  const addListBtn = document.getElementById('addListBtn');
+  if(addListBtn) addListBtn.onclick = ()=>{
+    const name = document.getElementById('newListName').value.trim();
+    if(!name) return;
+    state.lists.push({id:uid(), name, items:[], lastReset:todayStr()});
+    saveState(); render();
+  };
+  document.querySelectorAll('[data-addlistitem]').forEach(el=>{
+    el.onclick = ()=>{
+      const listId = el.dataset.addlistitem;
+      const input = document.querySelector(`[data-newitem-for="${listId}"]`);
+      const name = input.value.trim();
+      if(!name) return;
+      const list = state.lists.find(l=>l.id===listId);
+      list.items.push({id:uid(), name, checked:false});
+      saveState(); render();
+    };
+  });
+  document.querySelectorAll('[data-del-list]').forEach(el=>{
+    el.onclick = ()=>{ state.lists = state.lists.filter(l=>l.id!==el.dataset.delList); saveState(); render(); };
+  });
+  document.querySelectorAll('[data-del-item]').forEach(el=>{
+    el.onclick = ()=>{
+      const [listId,itemId] = el.dataset.delItem.split(':');
+      const list = state.lists.find(l=>l.id===listId);
+      list.items = list.items.filter(i=>i.id!==itemId);
+      saveState(); render();
+    };
+  });
+  document.querySelectorAll('[data-listitem]').forEach(el=>{
+    el.onclick = ()=>{
+      const [listId,itemId] = el.dataset.listitem.split(':');
+      const list = state.lists.find(l=>l.id===listId);
+      const item = list.items.find(i=>i.id===itemId);
+      item.checked = !item.checked;
+      saveState();
+      if(item.checked) celebrate('Packed!', 4);
+      render();
+    };
+  });
+
+  // QUESTS
+  const addQuestBtn = document.getElementById('addQuestBtn');
+  if(addQuestBtn) addQuestBtn.onclick = ()=>{
+    const name = document.getElementById('questName').value.trim();
+    const date = document.getElementById('questDate').value;
+    if(!name || !date){ toast('Add a name and date'); return; }
+    const diff = daysUntil(date);
+    const steps = QUEST_TEMPLATE.map(t=>({id:uid(), name:t.name, dueOffsetDays: Math.min(t.offset, Math.max(0,diff)), done:false, penalized:false}));
+    state.quests.push({id:uid(), name, eventDate:date, steps});
+    saveState(); render();
+  };
+  document.querySelectorAll('[data-del-quest]').forEach(el=>{
+    el.onclick = ()=>{ state.quests = state.quests.filter(q=>q.id!==el.dataset.delQuest); saveState(); render(); };
+  });
+  document.querySelectorAll('[data-queststep]').forEach(el=>{
+    el.onclick = ()=>{
+      const [qId,sId] = el.dataset.queststep.split(':');
+      const q = state.quests.find(x=>x.id===qId);
+      const s = q.steps.find(x=>x.id===sId);
+      s.done = !s.done;
+      saveState();
+      if(s.done) celebrate('Quest step complete!', 12);
+      render();
+    };
+  });
+
+  // MISSIONS
+  document.querySelectorAll('[data-mission]').forEach(el=>{
+    el.onclick = ()=> startMission(el.dataset.mission);
+  });
+  const backBtn = document.getElementById('backToMissions');
+  if(backBtn) backBtn.onclick = ()=>{ currentTab='missions'; missionState=null; render(); };
+  const claimBtn = document.getElementById('claimMission');
+  if(claimBtn) claimBtn.onclick = claimMissionReward;
+
+  if(missionState && missionState.id==='camp'){
+    document.querySelectorAll('[data-camp-item]').forEach(el=>{
+      el.onclick = ()=>{
+        const name = el.dataset.campItem;
+        const idx = missionState.packed.indexOf(name);
+        if(idx>=0) missionState.packed.splice(idx,1);
+        else if(missionState.packed.length<6) missionState.packed.push(name);
+        render();
+      };
+    });
+    const checkCamp = document.getElementById('checkCamp');
+    if(checkCamp) checkCamp.onclick = finishMission;
+  }
+  if(missionState && missionState.id==='movie'){
+    document.querySelectorAll('[data-movie-step]').forEach(el=>{
+      el.onclick = ()=>{
+        const s = el.dataset.movieStep;
+        const idx = missionState.picked.indexOf(s);
+        if(idx>=0) missionState.picked.splice(idx,1);
+        else missionState.picked.push(s);
+        render();
+      };
+    });
+    const checkMovie = document.getElementById('checkMovie');
+    if(checkMovie) checkMovie.onclick = finishMission;
+    const resetMovie = document.getElementById('resetMovie');
+    if(resetMovie) resetMovie.onclick = ()=>{ missionState.picked=[]; render(); };
+  }
+  if(missionState && missionState.id==='clock'){
+    document.querySelectorAll('[data-clock-item]').forEach(el=>{
+      el.onclick = ()=>{
+        const name = el.dataset.clockItem;
+        const idx = missionState.selected.indexOf(name);
+        if(idx>=0) missionState.selected.splice(idx,1);
+        else missionState.selected.push(name);
+        render();
+      };
+    });
+    const checkClock = document.getElementById('checkClock');
+    if(checkClock) checkClock.onclick = finishMission;
+  }
+  if(missionState && missionState.id==='party'){
+    document.querySelectorAll('[data-party-task]').forEach(el=>{
+      el.onchange = ()=>{
+        const i = parseInt(el.dataset.partyTask);
+        missionState.tasks[i].assigned = el.value===''? null : parseInt(el.value);
+      };
+    });
+    const checkParty = document.getElementById('checkParty');
+    if(checkParty) checkParty.onclick = ()=>{
+      if(missionState.tasks.some(t=>t.assigned===null)){ toast('Assign a day to every task first!'); return; }
+      finishMission();
+    };
+  }
+
+  // REWARDS
+  document.querySelectorAll('[data-redeem]').forEach(el=>{
+    el.onclick = ()=>{
+      const r = state.rewards.find(x=>x.id===el.dataset.redeem);
+      if(r && state.points.balance>=r.cost){
+        state.points.balance -= r.cost;
+        state.redeemedLog.push({id:uid(), name:r.name, cost:r.cost, date:todayStr()});
+        saveState();
+        toast('🎁 Traded in: '+r.name+'!');
+        render();
+      }
+    };
+  });
+  document.querySelectorAll('[data-del-reward]').forEach(el=>{
+    el.onclick = ()=>{ state.rewards = state.rewards.filter(r=>r.id!==el.dataset.delReward); saveState(); render(); };
+  });
+  const addRewardBtn = document.getElementById('addRewardBtn');
+  if(addRewardBtn) addRewardBtn.onclick = ()=>{
+    const name = document.getElementById('newRewardName').value.trim();
+    const cost = parseInt(document.getElementById('newRewardCost').value);
+    if(!name || !cost || cost<1){ toast('Add a name and a valid point cost'); return; }
+    state.rewards.push({id:uid(), name, cost});
+    saveState(); render();
+  };
+
+  // SETTINGS
+  const toggleNotif = document.getElementById('toggleNotif');
+  if(toggleNotif) toggleNotif.onclick = ()=>{
+    if(!state.notifications.enabled) requestNotifPermission();
+    else { state.notifications.enabled=false; saveState(); render(); }
+  };
+  const resetAllBtn = document.getElementById('resetAllBtn');
+  if(resetAllBtn) resetAllBtn.onclick = ()=>{
+    if(confirm('Are you sure? This deletes everything.')){
+      localStorage.removeItem(STORE_KEY);
+      state = defaultState();
+      currentTab='home';
+      render();
+    }
+  };
+}
+
+processRollover();
+render();
+if(window._rolloverSummary){
+  const s = window._rolloverSummary;
+  let msg;
+  if(s.totalMissed===0){
+    msg = `Yesterday: +${s.totalEarned} pts — nice, nothing missed!`;
+  } else if(s.totalEarned===0){
+    msg = `No points lost yesterday, but nothing was completed either — fresh start today!`;
+  } else {
+    msg = `Yesterday: +${s.totalEarned} pts earned, -${Math.min(s.totalMissed,s.totalEarned)} pts for missed stuff → net +${s.totalNet}`;
+  }
+  toast(msg);
+  window._rolloverSummary = null;
+}
+</script>
+</body>
+</html>
