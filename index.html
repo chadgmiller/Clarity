@@ -1204,7 +1204,12 @@ function attachHandlers(){
     c.onclick = ()=>{ c.classList.toggle('selected'); };
   });
   document.querySelectorAll('[data-del-routine]').forEach(el=>{
-    el.onclick = ()=>{ state.routines = state.routines.filter(x=>x.id!==el.dataset.delRoutine); saveState(); render(); };
+    el.onclick = ()=>{
+      const r = state.routines.find(x=>x.id===el.dataset.delRoutine);
+      if(r && !confirm(`Delete "${r.name}"? Its streak will be lost. This can't be undone.`)) return;
+      state.routines = state.routines.filter(x=>x.id!==el.dataset.delRoutine);
+      saveState(); render();
+    };
   });
 
   // LISTS
@@ -1227,7 +1232,12 @@ function attachHandlers(){
     };
   });
   document.querySelectorAll('[data-del-list]').forEach(el=>{
-    el.onclick = ()=>{ state.lists = state.lists.filter(l=>l.id!==el.dataset.delList); saveState(); render(); };
+    el.onclick = ()=>{
+      const l = state.lists.find(x=>x.id===el.dataset.delList);
+      if(l && !confirm(`Delete the "${l.name}" list and all its items? This can't be undone.`)) return;
+      state.lists = state.lists.filter(x=>x.id!==el.dataset.delList);
+      saveState(); render();
+    };
   });
   document.querySelectorAll('[data-del-item]').forEach(el=>{
     el.onclick = ()=>{
@@ -1261,7 +1271,12 @@ function attachHandlers(){
     saveState(); render();
   };
   document.querySelectorAll('[data-del-quest]').forEach(el=>{
-    el.onclick = ()=>{ state.quests = state.quests.filter(q=>q.id!==el.dataset.delQuest); saveState(); render(); };
+    el.onclick = ()=>{
+      const q = state.quests.find(x=>x.id===el.dataset.delQuest);
+      if(q && !confirm(`Delete "${q.name}" and all its steps? This can't be undone.`)) return;
+      state.quests = state.quests.filter(x=>x.id!==el.dataset.delQuest);
+      saveState(); render();
+    };
   });
   document.querySelectorAll('[data-queststep]').forEach(el=>{
     el.onclick = ()=>{
