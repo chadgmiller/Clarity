@@ -62,11 +62,11 @@
     display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#f8f6ff;margin-bottom:8px;
   }
   .task-item.done{background:#eafbf1;opacity:0.75;text-decoration:line-through;}
-  .task-item .chk{
+  .chk{
     width:26px;height:26px;border-radius:50%;border:3px solid var(--purple);background:white;cursor:pointer;flex:0 0 auto;
     display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--purple);
   }
-  .task-item.done .chk{background:var(--green);border-color:var(--green);color:white;}
+  .task-item.done .chk, .timeline .step.done .chk{background:var(--green);border-color:var(--green);color:white;}
   .badge{
     display:inline-flex;align-items:center;gap:6px;background:#fff2cc;color:#8a6100;padding:6px 12px;border-radius:999px;font-weight:700;font-size:13px;margin:2px;
   }
@@ -94,6 +94,7 @@
   }
   .timeline .step.overdue{background:#ffe9e9;}
   .timeline .step.today{background:#fff3d6;}
+  .timeline .step.done{background:#eafbf1;opacity:0.75;text-decoration:line-through;}
   .day-select{display:flex;gap:6px;flex-wrap:wrap;}
   .day-select .chip{padding:6px 10px;font-size:13px;}
   .empty{padding:30px;text-align:center;color:#a49fc0;}
@@ -901,7 +902,7 @@ function renderQuests(){
       const due = new Date(q.eventDate+'T00:00:00'); due.setDate(due.getDate()-s.dueOffsetDays);
       const dueStr = todayStr(due);
       const stepDiff = daysUntil(dueStr);
-      const cls = s.done? '' : (stepDiff<0?'overdue':(stepDiff===0?'today':''));
+      const cls = s.done? 'done' : (stepDiff<0?'overdue':(stepDiff===0?'today':''));
       html += `<div class="step ${cls}">
         <div class="chk" data-queststep="${q.id}:${s.id}">${s.done?'✓':''}</div>
         <div class="flex-fill">${s.name} <span class="muted small">(due ${fmtDate(dueStr)})</span></div>
