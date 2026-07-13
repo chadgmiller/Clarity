@@ -550,7 +550,7 @@ let calendarSelectedDate = todayStr();
 
 function getItemsForDate(dateStr){
   const wname = dayName(new Date(dateStr+'T00:00:00'));
-  const routines = state.routines.filter(r=> r.days.includes(wname));
+  const routines = state.routines.filter(r=> r.days.includes(wname) && (!r.createdDate || dateStr>=r.createdDate));
   const adhoc = state.adhoc.filter(a=> a.date===dateStr);
   const questSteps = [];
   state.quests.forEach(q=>{
@@ -1197,7 +1197,7 @@ function attachHandlers(){
     const durationMin = parseInt(document.getElementById('rDuration').value) || null;
     const days = Array.from(document.querySelectorAll('#rDays .chip.selected')).map(c=>c.dataset.day);
     if(!name || days.length===0){ toast('Add a name and pick at least one day'); return; }
-    state.routines.push({id:uid(), name, icon, time, durationMin, days, streak:0, lastDoneDate:null});
+    state.routines.push({id:uid(), name, icon, time, durationMin, days, streak:0, lastDoneDate:null, createdDate:todayStr()});
     saveState(); render();
   };
   document.querySelectorAll('#rDays .chip').forEach(c=>{
