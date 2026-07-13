@@ -239,6 +239,45 @@ function celebrate(msg, points=0){
 let currentTab = 'home';
 function setTab(t){ currentTab = t; render(); }
 
+/* ============ ROUTINE TIMER (for duration-based routines) ============ */
+let activeTimer = null; // {routineId, startedAt}
+function startTimer(routineId){
+  activeTimer = { routineId, startedAt: Date.now() };
+  render();
+}
+function cancelTimer(){
+  activeTimer = null;
+  render();
+}
+function finishTimer(routineId){
+  const r = state.routines.find(x=>x.id===routineId);
+  activeTimer = null;
+  if(r && r.lastDoneDate!==todayStr()){
+    r.lastDoneDate = todayStr();
+    r.streak = (r.streak||0)+1;
+    saveState();
+    celebrate(`${r.name} done!`, 8);
+  }
+  if(currentTab==='home') render();
+}
+function tickTimer(){
+  if(!activeTimer) return;
+  const r = state.routines.find(x=>x.id===activeTimer.routineId);
+  if(!r){ activeTimer=null; return; }
+  const elapsedSec = Math.floor((Date.now()-activeTimer.startedAt)/1000);
+  const targetSec = r.durationMin*60;
+  if(elapsedSec >= targetSec){ finishTimer(r.id); return; }
+  const clockEl = document.getElementById('timerClock');
+  const barEl = document.getElementById('timerBarFill');
+  if(clockEl && barEl){
+    const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
+    const ss = String(elapsedSec%60).padStart(2,'0');
+    clockEl.textContent = `${mm}:${ss} / ${r.durationMin}:00`;
+    barEl.style.width = Math.min(100, Math.round(elapsedSec/targetSec*100))+'%';
+  }
+}
+setInterval(tickTimer, 1000);
+
 /* ============ SETUP SCREEN ============ */
 function renderSetup(){
   const app = document.getElementById('app');
@@ -432,10 +471,30 @@ function renderHome(){
     html += `<div class="card"><h3>🔁 Today's Routines</h3>`;
     routines.forEach(r=>{
       const done = isRoutineDoneToday(r);
-      html += `<div class="task-item ${done?'done':''}">
-        <div class="chk" data-routine="${r.id}">${done?'✓':''}</div>
-        <div class="flex-fill">${r.icon} ${r.name} ${r.streak>0?`<span class="pill streak">🔥 ${r.streak}</span>`:''}</div>
-      </div>`;
+      if(activeTimer && activeTimer.routineId===r.id){
+        const elapsedSec = Math.max(0, Math.floor((Date.now()-activeTimer.startedAt)/1000));
+        const targetSec = r.durationMin*60;
+        const pct = Math.min(100, Math.round(elapsedSec/targetSec*100));
+        const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
+        const ss = String(elapsedSec%60).padStart(2,'0');
+        html += `<div class="task-item" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="row between">
+            <div class="flex-fill">${r.icon} ${r.name}</div>
+            <div class="muted small" id="timerClock">${mm}:${ss} / ${r.durationMin}:00</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" id="timerBarFill" style="width:${pct}%"></div></div>
+          <div class="row">
+            <button class="green" data-finish-timer="${r.id}">✓ Done</button>
+            <button class="secondary" data-cancel-timer="${r.id}">Cancel</button>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="task-item ${done?'done':''}">
+          <div class="chk" data-routine="${r.id}">${done?'✓':''}</div>
+          <div class="flex-fill">${r.icon} ${r.name} ${r.durationMin?`<span class="muted small">(${r.durationMin}+ min)</span>`:''} ${r.streak>0?`<span class="pill streak">🔥 ${r.streak}</span>`:''}</div>
+          ${(r.durationMin && !done) ? `<button class="secondary" data-starttimer="${r.id}">▶ Timer</button>` : ''}
+        </div>`;
+      }
     });
     html += `</div>`;
   }
@@ -668,7 +727,7 @@ function renderRoutines(){
   state.routines.forEach(r=>{
     html += `<div class="card">
       <div class="row between">
-        <div><b>${r.icon} ${r.name}</b> <span class="muted small">(${r.days.join(', ')}${r.time?', '+r.time:''})</span></div>
+        <div><b>${r.icon} ${r.name}</b> <span class="muted small">(${r.days.join(', ')}${r.time?', '+r.time:''}${r.durationMin?', '+r.durationMin+'+ min':''})</span></div>
         <div class="row">
           <span class="pill streak">🔥 ${r.streak} day streak</span>
           <button class="icon-btn" data-del-routine="${r.id}">✕</button>
@@ -682,7 +741,9 @@ function renderRoutines(){
       <input id="rIcon" placeholder="emoji" style="width:70px;" value="⭐">
       <input id="rName" placeholder="e.g. Piano practice" style="flex:1;min-width:160px;">
       <input id="rTime" type="time">
+      <input id="rDuration" type="number" min="1" placeholder="min minutes (optional)" style="width:170px;">
     </div>
+    <p class="small muted" style="margin-top:6px;">Give it a specific time (e.g. 4:00pm), or a minimum number of minutes for flexible practice like piano or reading — you don't need both.</p>
     <div class="day-select" style="margin-top:10px;" id="rDays">
       ${DAYS.map(d=>`<span class="chip" data-day="${d}">${d}</span>`).join('')}
     </div>
@@ -1013,15 +1074,27 @@ function attachHandlers(){
     };
   });
 
+  // HOME: routine timer (duration-based routines)
+  document.querySelectorAll('[data-starttimer]').forEach(el=>{
+    el.onclick = ()=> startTimer(el.dataset.starttimer);
+  });
+  document.querySelectorAll('[data-finish-timer]').forEach(el=>{
+    el.onclick = ()=> finishTimer(el.dataset.finishTimer);
+  });
+  document.querySelectorAll('[data-cancel-timer]').forEach(el=>{
+    el.onclick = ()=> cancelTimer();
+  });
+
   // ROUTINES: add
   const addRoutineBtn = document.getElementById('addRoutineBtn');
   if(addRoutineBtn) addRoutineBtn.onclick = ()=>{
     const icon = document.getElementById('rIcon').value.trim() || '⭐';
     const name = document.getElementById('rName').value.trim();
     const time = document.getElementById('rTime').value || null;
+    const durationMin = parseInt(document.getElementById('rDuration').value) || null;
     const days = Array.from(document.querySelectorAll('#rDays .chip.selected')).map(c=>c.dataset.day);
     if(!name || days.length===0){ toast('Add a name and pick at least one day'); return; }
-    state.routines.push({id:uid(), name, icon, time, days, streak:0, lastDoneDate:null});
+    state.routines.push({id:uid(), name, icon, time, durationMin, days, streak:0, lastDoneDate:null});
     saveState(); render();
   };
   document.querySelectorAll('#rDays .chip').forEach(c=>{
