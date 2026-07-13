@@ -366,6 +366,7 @@ function topBar(){
   const progressPct = next ? Math.max(0, Math.min(100, Math.round(((state.points.lifetime-rank.min)/(next.min-rank.min))*100))) : 100;
   const tabs = [
     ['home','🏠 Today'],
+    ['calendar','📅 Calendar'],
     ['missions','🎮 Practice'],
     ['routines','🔁 Routines'],
     ['lists','🎒 Lists'],
@@ -540,6 +541,97 @@ function maybeResetListsForNewDay(){
     }
   });
   saveState();
+}
+
+/* ============ CALENDAR ============ */
+let calendarViewDate = new Date();
+let calendarSelectedDate = todayStr();
+
+function getItemsForDate(dateStr){
+  const wname = dayName(new Date(dateStr+'T00:00:00'));
+  const routines = state.routines.filter(r=> r.days.includes(wname));
+  const adhoc = state.adhoc.filter(a=> a.date===dateStr);
+  const questSteps = [];
+  state.quests.forEach(q=>{
+    q.steps.forEach(s=>{
+      if(questStepDueStr(q,s)===dateStr) questSteps.push({quest:q, step:s});
+    });
+  });
+  return { routines, adhoc, questSteps };
+}
+
+function renderCalendar(){
+  const year = calendarViewDate.getFullYear();
+  const month = calendarViewDate.getMonth();
+  const monthLabel = calendarViewDate.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+  const firstOfMonth = new Date(year, month, 1);
+  const leadBlanks = (firstOfMonth.getDay()+6)%7; // Mon-first grid
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+
+  let html = `<h2>📅 Calendar</h2><p class="muted">See what's coming up so you can plan ahead.</p>`;
+  html += `<div class="card">
+    <div class="row between" style="margin-bottom:10px;">
+      <button class="secondary" id="calPrevMonth">◀</button>
+      <b>${monthLabel}</b>
+      <button class="secondary" id="calNextMonth">▶</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;">
+      ${DAYS.map(d=>`<div class="small muted" style="font-weight:700;">${d[0]}</div>`).join('')}
+      ${Array(leadBlanks).fill('<div></div>').join('')}
+      ${Array.from({length:daysInMonth}, (_,i)=>{
+        const dayNum = i+1;
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+        const items = getItemsForDate(dateStr);
+        const isToday = dateStr===todayStr();
+        const isSelected = dateStr===calendarSelectedDate;
+        const dotColor = isSelected ? 'white' : null;
+        return `<div data-caldate="${dateStr}" style="cursor:pointer;padding:6px 2px;border-radius:10px;${isSelected?'background:var(--purple);color:white;':(isToday?'background:#eee5ff;':'')}">
+          <div style="font-weight:${isToday?'800':'600'};">${dayNum}</div>
+          <div style="display:flex;justify-content:center;gap:2px;margin-top:2px;min-height:6px;">
+            ${items.routines.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--purple)'};display:inline-block;"></span>`:''}
+            ${items.adhoc.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--pink)'};display:inline-block;"></span>`:''}
+            ${items.questSteps.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--blue)'};display:inline-block;"></span>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  const sel = getItemsForDate(calendarSelectedDate);
+  const selDiff = daysUntil(calendarSelectedDate);
+  html += `<div class="card">
+    <h3>${fmtDate(calendarSelectedDate)} ${selDiff===0?'(Today)':selDiff>0?`(in ${selDiff} day${selDiff===1?'':'s'})`:'(past)'}</h3>`;
+  if(sel.routines.length===0 && sel.adhoc.length===0 && sel.questSteps.length===0){
+    html += `<div class="empty">Nothing planned this day.</div>`;
+  }
+  if(sel.routines.length){
+    html += `<div class="small muted" style="font-weight:700;margin:8px 0 2px;">🔁 Routines</div>`;
+    sel.routines.forEach(r=>{
+      const showDone = calendarSelectedDate===todayStr() && isRoutineDoneToday(r);
+      html += `<div class="task-item ${showDone?'done':''}">
+        <div class="flex-fill">${r.icon} ${r.name}${r.durationMin?` <span class="muted small">(${r.durationMin}+ min)</span>`:''}${r.time?` <span class="muted small">${r.time}</span>`:''}</div>
+      </div>`;
+    });
+  }
+  if(sel.adhoc.length){
+    html += `<div class="small muted" style="font-weight:700;margin:8px 0 2px;">📌 Reminders</div>`;
+    sel.adhoc.forEach(a=>{
+      html += `<div class="task-item ${a.done?'done':''}">
+        <div class="flex-fill">${a.name}</div>
+      </div>`;
+    });
+  }
+  if(sel.questSteps.length){
+    html += `<div class="small muted" style="font-weight:700;margin:8px 0 2px;">🗓️ Quest Steps</div>`;
+    sel.questSteps.forEach(({quest,step})=>{
+      const overdue = !step.done && calendarSelectedDate<todayStr();
+      html += `<div class="task-item ${step.done?'done':''}" style="${overdue?'background:#ffe9e9;':''}">
+        <div class="flex-fill"><b>${quest.name}</b>: ${step.name}</div>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+  return html;
 }
 
 /* ============ MISSIONS (LEVEL 1) ============ */
@@ -1019,6 +1111,7 @@ function render(){
 
   let body = '';
   if(currentTab==='home') body = renderHome();
+  else if(currentTab==='calendar') body = renderCalendar();
   else if(currentTab==='missions') body = renderMissions();
   else if(currentTab==='missionPlay') body = renderMissionPlay();
   else if(currentTab==='routines') body = renderRoutines();
@@ -1083,6 +1176,15 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-cancel-timer]').forEach(el=>{
     el.onclick = ()=> cancelTimer();
+  });
+
+  // CALENDAR
+  const calPrev = document.getElementById('calPrevMonth');
+  if(calPrev) calPrev.onclick = ()=>{ calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth()-1, 1); render(); };
+  const calNext = document.getElementById('calNextMonth');
+  if(calNext) calNext.onclick = ()=>{ calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth()+1, 1); render(); };
+  document.querySelectorAll('[data-caldate]').forEach(el=>{
+    el.onclick = ()=>{ calendarSelectedDate = el.dataset.caldate; render(); };
   });
 
   // ROUTINES: add
