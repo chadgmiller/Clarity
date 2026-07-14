@@ -535,19 +535,17 @@ function renderDay(){
     html += `<div class="card empty">Nothing planned${isToday?' yet':''}. ${isToday?'Add a routine, list, or event to start earning points.':''}</div>`;
   }
 
-  html += `<div class="card"><h3>📌 Don't forget</h3>`;
-  adhoc.forEach(a=>{
-    html += `<div class="task-item ${a.done?'done':''}">
-      <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-      <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
-      <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
-    </div>`;
-  });
-  html += `<div class="row" style="margin-top:8px;">
-    <input id="newAdhoc" placeholder="Add a quick reminder (e.g. Bring shoes)" style="flex:1;min-width:180px;">
-    <input type="date" id="newAdhocDate" value="${dateStr}">
-    <button id="addAdhocBtn">Add</button>
-  </div></div>`;
+  if(adhoc.length){
+    html += `<div class="card"><h3>📌 Don't forget</h3>`;
+    adhoc.forEach(a=>{
+      html += `<div class="task-item ${a.done?'done':''}">
+        <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
+        <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+        <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
+      </div>`;
+    });
+    html += `</div>`;
+  }
 
   if(items.routines.length){
     html += `<div class="card"><h3>🔁 Routines</h3>`;
