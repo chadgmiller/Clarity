@@ -6,113 +6,122 @@
 <title>Clarity</title>
 <style>
   :root{
-    --bg1:#fef6ff; --bg2:#eaf6ff; --card:#ffffff; --ink:#33324a;
-    --pink:#ff6fa5; --purple:#9b6bff; --blue:#4fc3f7; --green:#3ecf8e;
-    --yellow:#ffc94d; --red:#ff6b6b; --shadow: 0 6px 18px rgba(60,40,90,0.12);
+    --bg:#faf9f6; --card:#ffffff; --ink:#20241f; --muted:#6b7268;
+    --accent:#3f6a4e; --accent-soft:#e4ece2; --line:#e7e5dd;
+    --warn:#a8462f; --warn-soft:#f3e7e2; --dot-event:#4f6672;
+    --shadow: 0 1px 2px rgba(32,36,31,0.05), 0 6px 16px rgba(32,36,31,0.04);
   }
   *{box-sizing:border-box;}
   body{
-    margin:0; font-family:'Baloo 2','Comic Sans MS',system-ui,-apple-system,sans-serif;
-    background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--bg);
     color:var(--ink); min-height:100vh;
   }
-  #app{max-width:900px;margin:0 auto;padding:16px 16px 90px;}
-  h1,h2,h3{margin:0 0 8px;}
-  .card{background:var(--card);border-radius:20px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px;}
+  #app{max-width:860px;margin:0 auto;padding:16px 16px 90px;}
+  h1,h2{margin:0 0 8px;font-family:ui-serif,Georgia,'Iowan Old Style',serif;font-weight:600;letter-spacing:-0.01em;}
+  h3{margin:0 0 10px;font-family:ui-serif,Georgia,serif;font-style:italic;font-weight:400;color:var(--muted);font-size:14.5px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:var(--shadow);margin-bottom:14px;}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
   .between{justify-content:space-between;}
   button{
-    font-family:inherit;border:none;border-radius:14px;padding:10px 16px;font-size:15px;
-    font-weight:700;cursor:pointer;background:var(--purple);color:white;transition:transform .1s;
+    font-family:inherit;border:none;border-radius:8px;padding:10px 16px;font-size:14.5px;
+    font-weight:600;cursor:pointer;background:var(--accent);color:#fdfcfa;transition:transform .1s,opacity .1s;
   }
-  button:active{transform:scale(0.95);}
-  button.secondary{background:#eee5ff;color:var(--purple);}
-  button.green{background:var(--green);}
-  button.pink{background:var(--pink);}
-  button.blue{background:var(--blue);}
-  button.ghost{background:transparent;color:var(--purple);border:2px solid var(--purple);}
-  button:disabled{opacity:0.45;cursor:not-allowed;}
+  button:active{transform:scale(0.98);}
+  button:hover{opacity:0.92;}
+  button.secondary{background:var(--accent-soft);color:var(--accent);}
+  button.green{background:var(--accent);}
+  button.pink{background:var(--warn);}
+  button.blue{background:#57707a;}
+  button.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  button:focus-visible, input:focus-visible, select:focus-visible, .chk:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
   input,select{
-    font-family:inherit;font-size:15px;padding:9px 12px;border-radius:12px;border:2px solid #e5defa;background:#fbfaff;
+    font-family:inherit;font-size:14.5px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);
   }
-  .pill{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px;}
-  .pill.xp{background:#fff2cc;color:#a9780b;}
-  .pill.coin{background:#fff2cc;color:#a9780b;}
-  .pill.streak{background:#ffe3e3;color:#c23a3a;}
-  .pill.rank{background:#eee5ff;color:var(--purple);}
+  input:focus,select:focus{outline:none;border-color:var(--accent);}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12.5px;font-variant-numeric:tabular-nums;}
+  .pill.xp{background:var(--accent-soft);color:var(--accent);}
+  .pill.coin{background:var(--accent-soft);color:var(--accent);}
+  .pill.streak{background:transparent;color:var(--warn);padding:3px 0;}
+  .pill.rank{background:var(--accent-soft);color:var(--accent);}
   header#topbar{
-    position:sticky;top:0;z-index:20;background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    position:sticky;top:0;z-index:20;background:var(--bg);
     padding-top:10px;padding-bottom:4px;
   }
-  #navtabs{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:4px;position:relative;}
-  #navtabs button{white-space:nowrap;background:#f1ebff;color:var(--purple);flex:0 0 auto;}
-  #navtabs button.active{background:var(--purple);color:white;}
+  #navtabs{display:flex;gap:4px;flex-wrap:wrap;padding-bottom:4px;position:relative;}
+  #navtabs button{white-space:nowrap;background:transparent;color:var(--muted);flex:0 0 auto;border-radius:0;padding:8px 10px;border-bottom:2px solid transparent;font-weight:600;}
+  #navtabs button.active{background:transparent;color:var(--ink);border-bottom-color:var(--accent);}
   .navgroup{position:relative;}
-  .navdropdown{display:none;flex-direction:column;gap:4px;position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:6px;min-width:170px;z-index:30;}
+  .navdropdown{display:none;flex-direction:column;gap:2px;position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;min-width:170px;z-index:30;}
   .navdropdown.open{display:flex;}
-  .navdropdown button{width:100%;text-align:left;}
+  .navdropdown button{width:100%;text-align:left;border-bottom:none;border-radius:6px;padding:8px 10px;}
+  .navdropdown button.active{background:var(--accent-soft);color:var(--accent);}
   .profile-row{
     display:flex;align-items:center;gap:14px;
   }
   .avatar-badge{
-    font-size:40px;width:64px;height:64px;border-radius:16px;
+    font-size:32px;width:56px;height:56px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(circle at 30% 30%, #fff, #eee5ff);
-    box-shadow:inset 0 0 0 3px #ded0ff;
+    background:var(--accent-soft);
+    box-shadow:inset 0 0 0 1px var(--line);
   }
-  .bar-bg{background:#eee5f9;border-radius:999px;height:10px;overflow:hidden;}
-  .bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--purple),var(--pink));transition:width .4s;}
+  .bar-bg{background:var(--accent-soft);border-radius:999px;height:8px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s;}
   .task-item{
-    display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#f8f6ff;margin-bottom:8px;
+    display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);margin-bottom:0;
   }
-  .task-item.done{background:#eafbf1;opacity:0.75;text-decoration:line-through;}
+  .task-item:last-child{border-bottom:none;}
+  .task-item.done{opacity:0.6;text-decoration:line-through;}
   .chk{
-    width:26px;height:26px;border-radius:50%;border:3px solid var(--purple);background:white;cursor:pointer;flex:0 0 auto;
-    display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--purple);
+    width:22px;height:22px;border-radius:50%;border:1.5px solid #c7cabf;background:var(--card);cursor:pointer;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:12px;
   }
-  .task-item.done .chk, .timeline .step.done .chk{background:var(--green);border-color:var(--green);color:white;}
+  .task-item.done .chk, .timeline .step.done .chk{background:var(--accent);border-color:var(--accent);color:#fff;}
   .badge{
-    display:inline-flex;align-items:center;gap:6px;background:#fff2cc;color:#8a6100;padding:6px 12px;border-radius:999px;font-weight:700;font-size:13px;margin:2px;
+    display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent);padding:5px 12px;border-radius:999px;font-weight:600;font-size:12.5px;margin:2px;
   }
-  .badge.locked{background:#eee;color:#999;}
+  .badge.locked{background:var(--bg);color:var(--muted);border:1px solid var(--line);}
   .grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
   .mission-card{cursor:pointer;transition:transform .15s;}
-  .mission-card:hover{transform:translateY(-3px);}
+  .mission-card:hover{transform:translateY(-2px);}
   .chip{
-    display:inline-block;padding:8px 14px;border-radius:12px;background:#f1ebff;color:var(--purple);font-weight:700;
-    cursor:pointer;margin:4px;border:2px solid transparent;
+    display:inline-block;padding:7px 13px;border-radius:999px;background:var(--card);color:var(--ink);font-weight:600;font-size:13.5px;
+    cursor:pointer;margin:4px;border:1px solid var(--line);
   }
-  .chip.selected{background:var(--purple);color:white;}
+  .chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .chip.disabled{opacity:0.35;cursor:not-allowed;}
   .toast{
-    position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:white;
-    padding:12px 22px;border-radius:14px;z-index:100;box-shadow:var(--shadow);font-weight:700;
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fdfcfa;
+    padding:11px 20px;border-radius:10px;z-index:100;box-shadow:var(--shadow);font-weight:600;font-size:14px;
     animation:toastIn .3s ease;
   }
   @keyframes toastIn{from{opacity:0;transform:translate(-50%,-14px);}to{opacity:1;transform:translate(-50%,0);}}
-  .muted{color:#8a869e;font-size:14px;}
+  .muted{color:var(--muted);font-size:14px;}
   .small{font-size:13px;}
-  .timeline{display:flex;flex-direction:column;gap:8px;}
+  .timeline{display:flex;flex-direction:column;gap:0;}
   .timeline .step{
-    display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:#f8f6ff;
+    display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);
   }
-  .timeline .step.overdue{background:#ffe9e9;}
-  .timeline .step.today{background:#fff3d6;}
-  .timeline .step.done{background:#eafbf1;opacity:0.75;text-decoration:line-through;}
+  .timeline .step.overdue{background:var(--warn-soft);}
+  .timeline .step.today{background:var(--accent-soft);}
+  .timeline .step.done{opacity:0.6;text-decoration:line-through;}
   .day-select{display:flex;gap:6px;flex-wrap:wrap;}
   .day-select .chip{padding:6px 10px;font-size:13px;}
-  .empty{padding:30px;text-align:center;color:#a49fc0;}
-  .list-name{font-weight:800;font-size:17px;}
-  .progress-mini{font-size:12px;color:#8a869e;}
-  a.linklike{color:var(--purple);cursor:pointer;font-weight:700;text-decoration:underline;}
+  .empty{padding:28px;text-align:center;color:var(--muted);}
+  .list-name{font-weight:700;font-size:16.5px;font-family:ui-serif,Georgia,serif;}
+  .progress-mini{font-size:12px;color:var(--muted);}
+  a.linklike{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:underline;}
   .flex-fill{flex:1;}
-  .icon-btn{background:transparent;color:#b3aed6;font-size:18px;padding:4px 8px;}
-  .icon-btn:hover{color:var(--red);}
-  .setup-screen{max-width:480px;margin:40px auto;text-align:center;}
-  .avatar-pick{font-size:36px;padding:12px;border-radius:16px;background:#f8f6ff;cursor:pointer;border:3px solid transparent;}
-  .avatar-pick.selected{border-color:var(--purple);background:#eee5ff;}
-  footer.tip{font-size:13px;color:#9691ad;text-align:center;margin-top:20px;}
-  .reward-log{font-size:13px;color:#8a869e;margin-top:6px;}
+  .icon-btn{background:transparent;color:var(--muted);font-size:17px;padding:4px 8px;}
+  .icon-btn:hover{color:var(--warn);}
+  .setup-screen{max-width:460px;margin:40px auto;text-align:center;}
+  .avatar-pick{font-size:32px;padding:11px;border-radius:12px;background:var(--card);cursor:pointer;border:1.5px solid var(--line);}
+  .avatar-pick.selected{border-color:var(--accent);background:var(--accent-soft);}
+  footer.tip{font-size:13px;color:var(--muted);text-align:center;margin-top:20px;}
+  .reward-log{font-size:13px;color:var(--muted);margin-top:6px;}
 </style>
 </head>
 <body>
@@ -356,7 +365,7 @@ function renderAuth(){
         <h3>${mode==='signin' ? 'Sign In' : 'Create Account'}</h3>
         <input id="authEmail" type="email" placeholder="Email" style="width:80%;margin-bottom:8px;" autocomplete="username"><br>
         <input id="authPassword" type="password" placeholder="Password" style="width:80%;" autocomplete="${mode==='signin'?'current-password':'new-password'}">
-        <div id="authError" class="small" style="color:var(--red);min-height:18px;margin-top:6px;"></div>
+        <div id="authError" class="small" style="color:var(--warn);min-height:18px;margin-top:6px;"></div>
         <div style="margin-top:14px;">
           <button class="green" id="authSubmitBtn">${mode==='signin' ? 'Sign In' : 'Sign Up'}</button>
         </div>
@@ -384,7 +393,7 @@ function renderAuth(){
       if(error){
         errEl.textContent = error.message;
       } else if(!data.session){
-        errEl.style.color = 'var(--green)';
+        errEl.style.color = 'var(--accent)';
         errEl.textContent = 'Account created! Check your email to confirm it, then sign in.';
       }
     }
@@ -397,14 +406,14 @@ function topBar(){
   const next = nextRank();
   const progressPct = next ? Math.max(0, Math.min(100, Math.round(((state.points.lifetime-rank.min)/(next.min-rank.min))*100))) : 100;
   const navGroups = [
-    {id:'schedule', label:'📅 Schedule', children:[['day','Day'],['week','Week'],['month','Month']]},
-    {id:'planning', label:'📝 Planning', children:[['reminders','Reminders'],['routines','Routines'],['quests','Events']]},
-    {id:'lists', label:'🎒 Lists', children:[['templates','Event Templates'],['checklists','Checklists']]},
+    {id:'schedule', label:'Schedule', children:[['day','Day'],['week','Week'],['month','Month']]},
+    {id:'planning', label:'Planning', children:[['reminders','Reminders'],['routines','Routines'],['quests','Events']]},
+    {id:'lists', label:'Lists', children:[['templates','Event Templates'],['checklists','Checklists']]},
   ];
   const soloTabs = [
-    ['missions','🎮 Practice'],
-    ['rewards','🎁 Rewards'],
-    ['settings','⚙️ Settings'],
+    ['missions','Practice'],
+    ['rewards','Rewards'],
+    ['settings','Settings'],
   ];
   return `
   <header id="topbar">
@@ -413,12 +422,12 @@ function topBar(){
         <div class="profile-row">
           <div class="avatar-badge">${state.profile.avatar}</div>
           <div>
-            <div style="font-weight:800;font-size:18px;">${state.profile.name}</div>
+            <div style="font-family:ui-serif,Georgia,serif;font-weight:600;font-size:19px;">${state.profile.name}</div>
             <span class="pill rank">${rank.emoji} ${rank.label}</span>
           </div>
         </div>
         <div style="text-align:right;">
-          <span class="pill coin">🪙 ${state.points.balance} pts</span>
+          <span class="pill coin">${state.points.balance} pts</span>
           <div class="bar-bg" style="width:150px;margin-top:6px;"><div class="bar-fill" style="width:${progressPct}%"></div></div>
           <div class="muted small">${next? `${next.min-state.points.lifetime} to ${next.emoji} ${next.label}` : 'Top rank reached!'}</div>
         </div>
@@ -490,7 +499,7 @@ function renderRoutineRow(r, interactive){
   if(interactive){
     return `<div class="task-item ${done?'done':''}">
       <div class="chk" data-routine="${r.id}">${done?'✓':''}</div>
-      <div class="flex-fill">${r.icon} ${r.name} ${r.durationMin?`<span class="muted small">(${r.durationMin}+ min)</span>`:''} ${r.streak>0?`<span class="pill streak">🔥 ${r.streak}</span>`:''}</div>
+      <div class="flex-fill">${r.icon} ${r.name} ${r.durationMin?`<span class="muted small">(${r.durationMin}+ min)</span>`:''} ${r.streak>0?`<span class="pill streak">${r.streak} day streak</span>`:''}</div>
       ${(r.durationMin && !done) ? `<button class="secondary" data-starttimer="${r.id}">▶ Timer</button>` : ''}
     </div>`;
   }
@@ -536,7 +545,7 @@ function renderDay(){
   }
 
   if(adhoc.length){
-    html += `<div class="card"><h3>📌 Don't forget</h3>`;
+    html += `<div class="card"><h3>Don't forget</h3>`;
     adhoc.forEach(a=>{
       html += `<div class="task-item ${a.done?'done':''}">
         <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
@@ -548,13 +557,13 @@ function renderDay(){
   }
 
   if(items.routines.length){
-    html += `<div class="card"><h3>🔁 Routines</h3>`;
+    html += `<div class="card"><h3>Routines</h3>`;
     items.routines.forEach(r=>{ html += renderRoutineRow(r, isToday); });
     html += `</div>`;
   }
 
   if(pendingListItems.length){
-    html += `<div class="card"><h3>🎒 Pack &amp; Check</h3>`;
+    html += `<div class="card"><h3>Pack &amp; Check</h3>`;
     const byList = {};
     pendingListItems.forEach(({list,item})=>{ (byList[list.id]=byList[list.id]||{list,items:[]}).items.push(item); });
     Object.values(byList).forEach(({list,items})=>{
@@ -570,7 +579,7 @@ function renderDay(){
   }
 
   if(questSteps.length){
-    html += `<div class="card"><h3>🗓️ Event Steps${isToday?' Due':''}</h3>`;
+    html += `<div class="card"><h3>Event Steps${isToday?' Due':''}</h3>`;
     if(isToday){
       questSteps.forEach(({quest,step,dueStr,diff})=>{
         const cls = diff<0?'overdue':(diff===0?'today':'');
@@ -591,13 +600,13 @@ function renderDay(){
   }
 
   if(isToday){
-    html += `<footer class="tip">💡 Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`;
+    html += `<footer class="tip">Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`;
   }
   return html;
 }
 
 function renderReminders(){
-  let html = `<h2>📌 Reminders</h2><p class="muted">One-off things to remember — not routines, just quick heads-ups.</p>`;
+  let html = `<h2>Reminders</h2><p class="muted">One-off things to remember — not routines, just quick heads-ups.</p>`;
 
   const sorted = [...state.adhoc].sort((a,b)=> a.date.localeCompare(b.date));
   const t = todayStr();
@@ -622,10 +631,10 @@ function renderReminders(){
 
   if(!sorted.length){ html += `<div class="card empty">No reminders yet. Add your first one below!</div>`; }
 
-  html += section('⏰ Overdue', overdue);
-  html += section('📌 Today', dueToday);
-  html += section('🔜 Upcoming', upcoming);
-  html += section('✅ Done', done);
+  html += section('Overdue', overdue);
+  html += section('Today', dueToday);
+  html += section('Upcoming', upcoming);
+  html += section('Done', done);
 
   html += `<div class="card">
     <h3>Add a reminder</h3>
@@ -682,7 +691,7 @@ function renderMonth(){
   const leadBlanks = (firstOfMonth.getDay()+6)%7; // Mon-first grid
   const daysInMonth = new Date(year, month+1, 0).getDate();
 
-  let html = `<h2>📅 Month</h2><p class="muted">See what's coming up so you can plan ahead. Tap a day for details.</p>`;
+  let html = `<h2>Month</h2><p class="muted">See what's coming up so you can plan ahead. Tap a day for details.</p>`;
   html += `<div class="card">
     <div class="row between" style="margin-bottom:10px;">
       <button class="secondary" id="calPrevMonth">◀</button>
@@ -699,12 +708,12 @@ function renderMonth(){
         const isToday = dateStr===todayStr();
         const isSelected = dateStr===calendarSelectedDate;
         const dotColor = isSelected ? 'white' : null;
-        return `<div data-caldate="${dateStr}" style="cursor:pointer;padding:6px 2px;border-radius:10px;${isSelected?'background:var(--purple);color:white;':(isToday?'background:#eee5ff;':'')}">
+        return `<div data-caldate="${dateStr}" style="cursor:pointer;padding:6px 2px;border-radius:10px;${isSelected?'background:var(--accent);color:white;':(isToday?'background:var(--accent-soft);':'')}">
           <div style="font-weight:${isToday?'800':'600'};">${dayNum}</div>
           <div style="display:flex;justify-content:center;gap:2px;margin-top:2px;min-height:6px;">
-            ${items.routines.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--purple)'};display:inline-block;"></span>`:''}
-            ${items.adhoc.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--pink)'};display:inline-block;"></span>`:''}
-            ${items.questSteps.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--blue)'};display:inline-block;"></span>`:''}
+            ${items.routines.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--accent)'};display:inline-block;"></span>`:''}
+            ${items.adhoc.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--warn)'};display:inline-block;"></span>`:''}
+            ${items.questSteps.length?`<span style="width:6px;height:6px;border-radius:50%;background:${dotColor||'var(--dot-event)'};display:inline-block;"></span>`:''}
           </div>
         </div>`;
       }).join('')}
@@ -726,7 +735,7 @@ function renderWeek(){
   const days = Array.from({length:7}, (_,i)=>{ const d=new Date(start); d.setDate(start.getDate()+i); return d; });
   const rangeLabel = `${days[0].toLocaleDateString(undefined,{month:'short',day:'numeric'})} – ${days[6].toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}`;
 
-  let html = `<h2>🗓️ Week</h2><p class="muted">A quick look at the whole week. Tap a day for details.</p>`;
+  let html = `<h2>Week</h2><p class="muted">A quick look at the whole week. Tap a day for details.</p>`;
   html += `<div class="card">
     <div class="row between">
       <button class="secondary" id="weekPrev">◀</button>
@@ -740,11 +749,11 @@ function renderWeek(){
     const items = getItemsForDate(dateStr);
     const isToday = dateStr===todayStr();
     const dayItems = [
-      ...items.routines.map(r=>`🔁 ${r.icon} ${r.name}`),
-      ...items.adhoc.map(a=>`📌 ${a.name}`),
-      ...items.questSteps.map(({quest,step})=>`🗓️ ${quest.name}: ${step.name}`),
+      ...items.routines.map(r=>`${r.icon} ${r.name}`),
+      ...items.adhoc.map(a=>a.name),
+      ...items.questSteps.map(({quest,step})=>`${quest.name}: ${step.name}`),
     ];
-    html += `<div class="card" data-caldate="${dateStr}" style="cursor:pointer;${isToday?'box-shadow:inset 0 0 0 2px var(--purple);':''}">
+    html += `<div class="card" data-caldate="${dateStr}" style="cursor:pointer;${isToday?'box-shadow:inset 0 0 0 2px var(--accent);':''}">
       <div class="row between">
         <b>${dayName(d)}, ${d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</b>
         ${isToday?'<span class="pill rank">Today</span>':''}
@@ -777,7 +786,7 @@ const MISSIONS = [
 ];
 
 function renderMissions(){
-  let html = `<h2>🎮 Practice Missions</h2><p class="muted">Low-stakes games to build your planning brain. No real deadlines here!</p>`;
+  let html = `<h2>Practice Missions</h2><p class="muted">Low-stakes games to build your planning brain. No real deadlines here!</p>`;
   html += `<div class="grid-cards">`;
   MISSIONS.forEach(m=>{
     const done = state.missions.completed[m.id];
@@ -845,9 +854,9 @@ function renderMissionPlay(){
       const correct = missionState.packed.filter(n=>CAMP_ITEMS.find(i=>i.name===n).need).length;
       const junk = missionState.packed.filter(n=>!CAMP_ITEMS.find(i=>i.name===n).need).length;
       const missedNeeded = CAMP_ITEMS.filter(i=>i.need && !missionState.packed.includes(i.name)).length;
-      inner += `<div class="card" style="margin-top:14px;background:#f3fff7;">
+      inner += `<div class="card" style="margin-top:14px;background:var(--accent-soft);">
         <p>You packed <b>${correct}</b> good items${junk?`, but also ${junk} things you didn't need`:''}${missedNeeded?`, and missed ${missedNeeded} useful item(s)`:''}.</p>
-        <p class="small muted">💡 Real tip: before any trip, list what you'll actually use — not everything you own!</p>
+        <p class="small muted">Real tip: before any trip, list what you'll actually use — not everything you own!</p>
       </div>`;
     }
   }
@@ -862,7 +871,7 @@ function renderMissionPlay(){
       <button class="secondary" id="resetMovie">Reset</button></div>`;
     if(missionState.done){
       const numCorrect = missionState.picked.filter((s,i)=>s===missionState.correctOrder[i]).length;
-      inner += `<div class="card" style="margin-top:14px;background:#f3fff7;">
+      inner += `<div class="card" style="margin-top:14px;background:var(--accent-soft);">
         <p>${numCorrect}/${missionState.correctOrder.length} in the right spot!</p>
         <p class="small">Best order: ${missionState.correctOrder.map((s,i)=>`${i+1}. ${s}`).join(' → ')}</p>
       </div>`;
@@ -881,9 +890,9 @@ function renderMissionPlay(){
     if(missionState.done){
       const total = missionState.selected.reduce((sum,n)=>sum+missionState.optional.find(o=>o.name===n).min,0);
       const ok = total<=(45-24);
-      inner += `<div class="card" style="margin-top:14px;background:${ok?'#f3fff7':'#fff3f3'};">
-        <p>${ok? '🎉 You made it out the door on time!' : '⏰ You would have been running late! Too much packed in.'}</p>
-        <p class="small muted">💡 Real tip: always leave buffer time — mornings never go exactly as planned.</p>
+      inner += `<div class="card" style="margin-top:14px;background:${ok?'var(--accent-soft)':'var(--warn-soft)'};">
+        <p>${ok? 'You made it out the door on time!' : 'You would have been running late! Too much packed in.'}</p>
+        <p class="small muted">Real tip: always leave buffer time — mornings never go exactly as planned.</p>
       </div>`;
     }
   }
@@ -903,16 +912,16 @@ function renderMissionPlay(){
     if(missionState.done){
       let goodCount = 0;
       missionState.tasks.forEach(t=>{ if(t.assigned!==null && t.assigned>=t.ideal) goodCount++; });
-      inner += `<div class="card" style="margin-top:14px;background:#f3fff7;">
+      inner += `<div class="card" style="margin-top:14px;background:var(--accent-soft);">
         <p>${goodCount}/${missionState.tasks.length} tasks were given enough lead time.</p>
-        <p class="small muted">💡 Real tip: gifts & rides need days of notice — cards & double-checking can wait til closer to the day.</p>
+        <p class="small muted">Real tip: gifts & rides need days of notice — cards & double-checking can wait til closer to the day.</p>
       </div>`;
     }
   }
 
   return `<button class="secondary" id="backToMissions">← Back to Missions</button>
     <div class="card"><h2>${m.emoji} ${m.title}</h2>${inner}
-    ${missionState.done? `<div style="margin-top:10px;"><button id="claimMission">Claim Points 🎁</button></div>`:''}
+    ${missionState.done? `<div style="margin-top:10px;"><button id="claimMission">Claim Points</button></div>`:''}
     </div>`;
 }
 
@@ -936,14 +945,14 @@ function claimMissionReward(){
 /* ============ ROUTINES ============ */
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 function renderRoutines(){
-  let html = `<h2>🔁 My Routines</h2><p class="muted">Things you do again and again — practice, medicine, chores.</p>`;
+  let html = `<h2>My Routines</h2><p class="muted">Things you do again and again — practice, medicine, chores.</p>`;
   if(state.routines.length===0){ html += `<div class="card empty">No routines yet. Add your first one below!</div>`; }
   state.routines.forEach(r=>{
     html += `<div class="card">
       <div class="row between">
         <div><b>${r.icon} ${r.name}</b> <span class="muted small">(${r.days.join(', ')}${r.time?', '+r.time:''}${r.durationMin?', '+r.durationMin+'+ min':''})</span></div>
         <div class="row">
-          <span class="pill streak">🔥 ${r.streak} day streak</span>
+          <span class="pill streak">${r.streak} day streak</span>
           <button class="icon-btn" data-del-routine="${r.id}">✕</button>
         </div>
       </div>
@@ -968,7 +977,7 @@ function renderRoutines(){
 
 /* ============ LISTS ============ */
 function renderChecklists(){
-  let html = `<h2>🎒 Checklists</h2><p class="muted">Reusable checklists that reset each day — school bag, sports bag, sleepover bag...</p>`;
+  let html = `<h2>Checklists</h2><p class="muted">Reusable checklists that reset each day — school bag, sports bag, sleepover bag...</p>`;
   if(state.lists.length===0){ html += `<div class="card empty">No lists yet. Create one below!</div>`; }
   state.lists.forEach(l=>{
     const doneCount = l.items.filter(i=>i.checked).length;
@@ -999,7 +1008,7 @@ function renderChecklists(){
 }
 
 function renderTemplates(){
-  let html = `<h2>📋 Event Templates</h2><p class="muted">Reusable step plans for things you plan for again and again — birthdays, sleepovers, trips. Build one here, then use it as a starting point when you create a new event (customize it per event — templates stay untouched).</p>`;
+  let html = `<h2>Event Templates</h2><p class="muted">Reusable step plans for things you plan for again and again — birthdays, sleepovers, trips. Build one here, then use it as a starting point when you create a new event (customize it per event — templates stay untouched).</p>`;
   if(state.questTemplates.length===0){ html += `<div class="card empty">No templates yet. Create one below!</div>`; }
   state.questTemplates.forEach(tpl=>{
     html += `<div class="card">
@@ -1032,7 +1041,7 @@ function renderTemplates(){
 
 /* ============ QUESTS (events) ============ */
 function renderQuests(){
-  let html = `<h2>🗓️ My Events</h2><p class="muted">Big one-time things — birthday parties, projects, trips. Start blank or from one of your templates, then customize.</p>`;
+  let html = `<h2>My Events</h2><p class="muted">Big one-time things — birthday parties, projects, trips. Start blank or from one of your templates, then customize.</p>`;
   if(state.quests.length===0){ html += `<div class="card empty">No events yet. Start one below!</div>`; }
   state.quests.forEach(q=>{
     const doneCount = q.steps.filter(s=>s.done).length;
@@ -1085,13 +1094,13 @@ function renderQuests(){
 
 /* ============ REWARDS (trade-up) ============ */
 function renderRewards(){
-  let html = `<h2>🎁 Rewards</h2><p class="muted">Trade in your points for real rewards. Balance: <b>${state.points.balance} pts</b>.</p>`;
+  let html = `<h2>Rewards</h2><p class="muted">Trade in your points for real rewards. Balance: <b>${state.points.balance} pts</b>.</p>`;
   html += `<div class="grid-cards">`;
   state.rewards.forEach(r=>{
     const canAfford = state.points.balance >= r.cost;
     html += `<div class="card" style="text-align:center;">
       <h3>${r.name}</h3>
-      <p class="small muted">🪙 ${r.cost} pts</p>
+      <p class="small muted">${r.cost} pts</p>
       <div class="row" style="justify-content:center;">
         <button data-redeem="${r.id}" ${canAfford?'':'disabled'}>Trade In</button>
         <button class="icon-btn" data-del-reward="${r.id}">✕</button>
@@ -1120,7 +1129,7 @@ function renderRewards(){
 /* ============ SETTINGS ============ */
 function renderSettings(){
   const notifOn = state.notifications.enabled;
-  let html = `<h2>⚙️ Settings</h2>
+  let html = `<h2>Settings</h2>
   <div class="card">
     <h3>How points & penalties work</h3>
     <p class="small muted">Completing a routine, reminder, event step, or finishing a list earns points right away. If something scheduled for today is still undone by tonight, it trims a matching number of points off <b>today's</b> total — but only up to what was earned today. Points and rank from previous days are never taken away, and a rough day just nets to zero rather than going negative.</p>
@@ -1128,7 +1137,7 @@ function renderSettings(){
   <div class="card">
     <h3>Reminders</h3>
     <p class="small muted">Turn on notifications so Clarity can pop up reminders for routines, lists, and event steps — even if you're doing something else. Keep this browser tab open for reminders to work.</p>
-    <button id="toggleNotif" class="${notifOn?'green':''}">${notifOn? '🔔 Reminders On' : 'Turn On Reminders'}</button>
+    <button id="toggleNotif" class="${notifOn?'green':''}">${notifOn? 'Reminders On' : 'Turn On Reminders'}</button>
   </div>
   <div class="card">
     <h3>Reset</h3>
@@ -1237,7 +1246,7 @@ function checkReminders(){
     if(!r.days.includes(dayName())) return;
     const key = 'routine_'+r.id+'_'+t;
     if(r.time===hm && !state.notifiedToday[key] && !isRoutineDoneToday(r)){
-      new Notification('Clarity reminder 🔁', {body: `Time for: ${r.name}`});
+      new Notification('Clarity reminder', {body: `Time for: ${r.name}`});
       state.notifiedToday[key]=true; saveState();
     }
   });
@@ -1245,7 +1254,7 @@ function checkReminders(){
     if(a.done || a.date!==t || !a.time) return;
     const key = 'adhoc_'+a.id;
     if(a.time===hm && !state.notifiedToday[key]){
-      new Notification('Clarity reminder 📌', {body: a.name});
+      new Notification('Clarity reminder', {body: a.name});
       state.notifiedToday[key]=true; saveState();
     }
   });
@@ -1255,7 +1264,7 @@ function checkReminders(){
     if(!state.notifiedToday[key]){
       const steps = getUpcomingQuestSteps();
       if(steps.length){
-        new Notification('Clarity 🗓️', {body: `You have ${steps.length} event step(s) due today!`});
+        new Notification('Clarity', {body: `You have ${steps.length} event step(s) due today!`});
       }
       state.notifiedToday[key]=true; saveState();
     }
