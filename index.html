@@ -44,9 +44,13 @@
     position:sticky;top:0;z-index:20;background:linear-gradient(160deg,var(--bg1),var(--bg2));
     padding-top:10px;padding-bottom:4px;
   }
-  #navtabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;}
+  #navtabs{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:4px;position:relative;}
   #navtabs button{white-space:nowrap;background:#f1ebff;color:var(--purple);flex:0 0 auto;}
   #navtabs button.active{background:var(--purple);color:white;}
+  .navgroup{position:relative;}
+  .navdropdown{display:none;flex-direction:column;gap:4px;position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:6px;min-width:170px;z-index:30;}
+  .navdropdown.open{display:flex;}
+  .navdropdown button{width:100%;text-align:left;}
   .profile-row{
     display:flex;align-items:center;gap:14px;
   }
@@ -259,8 +263,13 @@ function celebrate(msg, points=0){
 }
 
 /* ============ ROUTER ============ */
-let currentTab = 'home';
+let currentTab = 'day';
 function setTab(t){ currentTab = t; render(); }
+
+let openNavGroup = null;
+document.addEventListener('click', ()=>{
+  if(openNavGroup){ openNavGroup = null; render(); }
+});
 
 /* ============ ROUTINE TIMER (for duration-based routines) ============ */
 let activeTimer = null; // {routineId, startedAt}
@@ -281,7 +290,7 @@ function finishTimer(routineId){
     saveState();
     celebrate(`${r.name} done!`, 8);
   }
-  if(currentTab==='home' || currentTab==='calendar') render();
+  if(currentTab==='day') render();
 }
 function tickTimer(){
   if(!activeTimer) return;
@@ -387,13 +396,13 @@ function topBar(){
   const rank = currentRank();
   const next = nextRank();
   const progressPct = next ? Math.max(0, Math.min(100, Math.round(((state.points.lifetime-rank.min)/(next.min-rank.min))*100))) : 100;
-  const tabs = [
-    ['home','🏠 Today'],
-    ['calendar','📅 Calendar'],
+  const navGroups = [
+    {id:'schedule', label:'📅 Schedule', children:[['day','Day'],['week','Week'],['month','Month']]},
+    {id:'planning', label:'📝 Planning', children:[['reminders','Reminders'],['routines','Routines'],['quests','Events']]},
+    {id:'lists', label:'🎒 Lists', children:[['templates','Event Templates'],['checklists','Checklists']]},
+  ];
+  const soloTabs = [
     ['missions','🎮 Practice'],
-    ['routines','🔁 Routines'],
-    ['lists','🎒 Lists'],
-    ['quests','🗓️ Events'],
     ['rewards','🎁 Rewards'],
     ['settings','⚙️ Settings'],
   ];
@@ -416,7 +425,16 @@ function topBar(){
       </div>
     </div>
     <div id="navtabs">
-      ${tabs.map(([id,label])=>`<button class="${currentTab===id?'active':'secondary'}" data-tab="${id}">${label}</button>`).join('')}
+      ${navGroups.map(g=>{
+        const isActive = g.children.some(([id])=>id===currentTab);
+        return `<div class="navgroup">
+          <button class="${isActive?'active':'secondary'}" data-navgroup="${g.id}">${g.label} ▾</button>
+          <div class="navdropdown ${openNavGroup===g.id?'open':''}">
+            ${g.children.map(([id,label])=>`<button class="${currentTab===id?'active':'secondary'}" data-tab="${id}">${label}</button>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+      ${soloTabs.map(([id,label])=>`<button class="${currentTab===id?'active':'secondary'}" data-tab="${id}">${label}</button>`).join('')}
     </div>
   </header>
   `;
@@ -481,51 +499,59 @@ function renderRoutineRow(r, interactive){
   </div>`;
 }
 
-function renderHome(){
+function renderDay(){
   maybeResetListsForNewDay();
-  const routines = getTodayRoutines();
-  const adhoc = getTodayAdhoc();
-  const questSteps = getUpcomingQuestSteps();
+  const dateStr = calendarSelectedDate;
+  const isToday = dateStr===todayStr();
+  const items = getItemsForDate(dateStr);
+  const adhoc = isToday ? getTodayAdhoc() : items.adhoc;
+  const questSteps = isToday ? getUpcomingQuestSteps() : items.questSteps;
   const pendingListItems = [];
-  state.lists.forEach(l=>{
-    l.items.forEach(it=>{ if(!it.checked) pendingListItems.push({list:l,item:it}); });
-  });
-
-  const totalToday = routines.length + adhoc.length + questSteps.length + pendingListItems.length;
-
-  let html = `<h2>Today, ${fmtDate(todayStr())}</h2>`;
-  html += `<p class="muted small">Earned today: <b>${pointsEarnedToday()} pts</b>. Anything left undone by tonight trims a little off today's total — never from what you've already banked.</p>`;
-
-  if(totalToday===0){
-    html += `<div class="card empty">Nothing planned yet. Add a routine, list, or event below to start earning points.</div>`;
-  }
-
-  if(adhoc.length){
-    html += `<div class="card"><h3>📌 Don't forget</h3>`;
-    adhoc.forEach(a=>{
-      html += `<div class="task-item ${a.done?'done':''}">
-        <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-        <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
-        <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
-      </div>`;
+  if(isToday){
+    state.lists.forEach(l=>{
+      l.items.forEach(it=>{ if(!it.checked) pendingListItems.push({list:l,item:it}); });
     });
-    html += `<div class="row" style="margin-top:8px;">
-      <input id="newAdhoc" placeholder="Add a quick reminder (e.g. Bring shoes)" style="flex:1;min-width:180px;">
-      <input type="date" id="newAdhocDate" value="${todayStr()}">
-      <button id="addAdhocBtn">Add</button>
-    </div></div>`;
-  } else {
-    html += `<div class="card"><h3>📌 Don't forget</h3>
-      <div class="row">
-        <input id="newAdhoc" placeholder="Add a quick reminder (e.g. Bring shoes)" style="flex:1;min-width:180px;">
-        <input type="date" id="newAdhocDate" value="${todayStr()}">
-        <button id="addAdhocBtn">Add</button>
-      </div></div>`;
+  }
+  const diff = daysUntil(dateStr);
+
+  const total = items.routines.length + adhoc.length + questSteps.length + pendingListItems.length;
+
+  let html = `<div class="card">
+    <div class="row between">
+      <button class="secondary" id="calPrevDay">◀</button>
+      <div style="text-align:center;">
+        <h2 style="margin:0;">${isToday?'Today, ':''}${fmtDate(dateStr)}</h2>
+        <div class="muted small">${isToday?'':diff>0?`in ${diff} day${diff===1?'':'s'}`:'past'}${!isToday?' &middot; <a class="linklike" id="calJumpToday">Jump to today</a>':''}</div>
+      </div>
+      <button class="secondary" id="calNextDay">▶</button>
+    </div>
+  </div>`;
+
+  if(isToday){
+    html += `<p class="muted small">Earned today: <b>${pointsEarnedToday()} pts</b>. Anything left undone by tonight trims a little off today's total — never from what you've already banked.</p>`;
   }
 
-  if(routines.length){
-    html += `<div class="card"><h3>🔁 Today's Routines</h3>`;
-    routines.forEach(r=>{ html += renderRoutineRow(r, true); });
+  if(total===0){
+    html += `<div class="card empty">Nothing planned${isToday?' yet':''}. ${isToday?'Add a routine, list, or event to start earning points.':''}</div>`;
+  }
+
+  html += `<div class="card"><h3>📌 Don't forget</h3>`;
+  adhoc.forEach(a=>{
+    html += `<div class="task-item ${a.done?'done':''}">
+      <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
+      <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+      <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
+    </div>`;
+  });
+  html += `<div class="row" style="margin-top:8px;">
+    <input id="newAdhoc" placeholder="Add a quick reminder (e.g. Bring shoes)" style="flex:1;min-width:180px;">
+    <input type="date" id="newAdhocDate" value="${dateStr}">
+    <button id="addAdhocBtn">Add</button>
+  </div></div>`;
+
+  if(items.routines.length){
+    html += `<div class="card"><h3>🔁 Routines</h3>`;
+    items.routines.forEach(r=>{ html += renderRoutineRow(r, isToday); });
     html += `</div>`;
   }
 
@@ -546,18 +572,71 @@ function renderHome(){
   }
 
   if(questSteps.length){
-    html += `<div class="card"><h3>🗓️ Event Steps Due</h3>`;
-    questSteps.forEach(({quest,step,dueStr,diff})=>{
-      const cls = diff<0?'overdue':(diff===0?'today':'');
-      html += `<div class="timeline"><div class="step ${cls}">
-        <div class="chk" data-queststep="${quest.id}:${step.id}"></div>
-        <div class="flex-fill"><b>${quest.name}</b>: ${step.name} <span class="muted small">(${diff<0?'overdue':diff===0?'today':'tomorrow'})</span></div>
-      </div></div>`;
-    });
+    html += `<div class="card"><h3>🗓️ Event Steps${isToday?' Due':''}</h3>`;
+    if(isToday){
+      questSteps.forEach(({quest,step,dueStr,diff})=>{
+        const cls = diff<0?'overdue':(diff===0?'today':'');
+        html += `<div class="timeline"><div class="step ${cls}">
+          <div class="chk" data-queststep="${quest.id}:${step.id}"></div>
+          <div class="flex-fill"><b>${quest.name}</b>: ${step.name} <span class="muted small">(${diff<0?'overdue':diff===0?'today':'tomorrow'})</span></div>
+        </div></div>`;
+      });
+    } else {
+      questSteps.forEach(({quest,step})=>{
+        html += `<div class="task-item ${step.done?'done':''}">
+          <div class="chk" data-queststep="${quest.id}:${step.id}">${step.done?'✓':''}</div>
+          <div class="flex-fill"><b>${quest.name}</b>: ${step.name}</div>
+        </div>`;
+      });
+    }
     html += `</div>`;
   }
 
-  html += `<footer class="tip">💡 Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`;
+  if(isToday){
+    html += `<footer class="tip">💡 Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`;
+  }
+  return html;
+}
+
+function renderReminders(){
+  let html = `<h2>📌 Reminders</h2><p class="muted">One-off things to remember — not routines, just quick heads-ups.</p>`;
+
+  const sorted = [...state.adhoc].sort((a,b)=> a.date.localeCompare(b.date));
+  const t = todayStr();
+  const overdue = sorted.filter(a=>!a.done && a.date<t);
+  const dueToday = sorted.filter(a=>a.date===t);
+  const upcoming = sorted.filter(a=>a.date>t);
+  const done = sorted.filter(a=>a.done && a.date<t);
+
+  function section(title, list){
+    if(!list.length) return '';
+    let h = `<div class="card"><h3>${title}</h3>`;
+    list.forEach(a=>{
+      h += `<div class="task-item ${a.done?'done':''}">
+        <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
+        <div class="flex-fill">${a.name} <span class="muted small">${fmtDate(a.date)}</span></div>
+        <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
+      </div>`;
+    });
+    h += `</div>`;
+    return h;
+  }
+
+  if(!sorted.length){ html += `<div class="card empty">No reminders yet. Add your first one below!</div>`; }
+
+  html += section('⏰ Overdue', overdue);
+  html += section('📌 Today', dueToday);
+  html += section('🔜 Upcoming', upcoming);
+  html += section('✅ Done', done);
+
+  html += `<div class="card">
+    <h3>Add a reminder</h3>
+    <div class="row">
+      <input id="newAdhoc" placeholder="e.g. Bring shoes" style="flex:1;min-width:180px;">
+      <input type="date" id="newAdhocDate" value="${todayStr()}">
+      <button id="addAdhocBtn">Add</button>
+    </div>
+  </div>`;
   return html;
 }
 
@@ -597,7 +676,7 @@ function getItemsForDate(dateStr){
   return { routines, adhoc, questSteps };
 }
 
-function renderCalendar(){
+function renderMonth(){
   const year = calendarViewDate.getFullYear();
   const month = calendarViewDate.getMonth();
   const monthLabel = calendarViewDate.toLocaleDateString(undefined,{month:'long', year:'numeric'});
@@ -605,7 +684,7 @@ function renderCalendar(){
   const leadBlanks = (firstOfMonth.getDay()+6)%7; // Mon-first grid
   const daysInMonth = new Date(year, month+1, 0).getDate();
 
-  let html = `<h2>📅 Calendar</h2><p class="muted">See what's coming up so you can plan ahead.</p>`;
+  let html = `<h2>📅 Month</h2><p class="muted">See what's coming up so you can plan ahead. Tap a day for details.</p>`;
   html += `<div class="card">
     <div class="row between" style="margin-bottom:10px;">
       <button class="secondary" id="calPrevMonth">◀</button>
@@ -634,51 +713,47 @@ function renderCalendar(){
     </div>
   </div>`;
 
-  const sel = getItemsForDate(calendarSelectedDate);
-  const selDiff = daysUntil(calendarSelectedDate);
-  const isSelToday = calendarSelectedDate===todayStr();
+  return html;
+}
 
+function startOfWeek(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const dow = (d.getDay()+6)%7; // Mon=0
+  d.setDate(d.getDate()-dow);
+  return d;
+}
+
+function renderWeek(){
+  const start = startOfWeek(calendarSelectedDate);
+  const days = Array.from({length:7}, (_,i)=>{ const d=new Date(start); d.setDate(start.getDate()+i); return d; });
+  const rangeLabel = `${days[0].toLocaleDateString(undefined,{month:'short',day:'numeric'})} – ${days[6].toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}`;
+
+  let html = `<h2>🗓️ Week</h2><p class="muted">A quick look at the whole week. Tap a day for details.</p>`;
   html += `<div class="card">
     <div class="row between">
-      <button class="secondary" id="calPrevDay">◀</button>
-      <div style="text-align:center;">
-        <h3 style="margin:0;">${fmtDate(calendarSelectedDate)}</h3>
-        <div class="muted small">${isSelToday?'Today':selDiff>0?`in ${selDiff} day${selDiff===1?'':'s'}`:'past'}${!isSelToday?' &middot; <a class="linklike" id="calJumpToday">Jump to today</a>':''}</div>
-      </div>
-      <button class="secondary" id="calNextDay">▶</button>
+      <button class="secondary" id="weekPrev">◀</button>
+      <b>${rangeLabel}</b>
+      <button class="secondary" id="weekNext">▶</button>
     </div>
   </div>`;
 
-  html += `<div class="card"><h3>📌 Don't forget</h3>`;
-  sel.adhoc.forEach(a=>{
-    html += `<div class="task-item ${a.done?'done':''}">
-      <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-      <div class="flex-fill">${a.name}</div>
-      <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
+  days.forEach(d=>{
+    const dateStr = todayStr(d);
+    const items = getItemsForDate(dateStr);
+    const isToday = dateStr===todayStr();
+    const dayItems = [
+      ...items.routines.map(r=>`🔁 ${r.icon} ${r.name}`),
+      ...items.adhoc.map(a=>`📌 ${a.name}`),
+      ...items.questSteps.map(({quest,step})=>`🗓️ ${quest.name}: ${step.name}`),
+    ];
+    html += `<div class="card" data-caldate="${dateStr}" style="cursor:pointer;${isToday?'box-shadow:inset 0 0 0 2px var(--purple);':''}">
+      <div class="row between">
+        <b>${dayName(d)}, ${d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</b>
+        ${isToday?'<span class="pill rank">Today</span>':''}
+      </div>
+      ${dayItems.length ? dayItems.map(t=>`<div class="small" style="margin-top:4px;">${t}</div>`).join('') : `<div class="muted small" style="margin-top:4px;">Nothing planned</div>`}
     </div>`;
   });
-  html += `<div class="row" style="margin-top:8px;">
-    <input id="newAdhoc" placeholder="Add a reminder for this day" style="flex:1;min-width:180px;">
-    <input type="date" id="newAdhocDate" value="${calendarSelectedDate}">
-    <button id="addAdhocBtn">Add</button>
-  </div></div>`;
-
-  if(sel.routines.length){
-    html += `<div class="card"><h3>🔁 Routines</h3>`;
-    sel.routines.forEach(r=>{ html += renderRoutineRow(r, isSelToday); });
-    html += `</div>`;
-  }
-
-  if(sel.questSteps.length){
-    html += `<div class="card"><h3>🗓️ Event Steps</h3>`;
-    sel.questSteps.forEach(({quest,step})=>{
-      html += `<div class="task-item ${step.done?'done':''}">
-        <div class="chk" data-queststep="${quest.id}:${step.id}">${step.done?'✓':''}</div>
-        <div class="flex-fill"><b>${quest.name}</b>: ${step.name}</div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
 
   return html;
 }
@@ -894,9 +969,8 @@ function renderRoutines(){
 }
 
 /* ============ LISTS ============ */
-function renderLists(){
-  let html = `<h2>🎒 Lists &amp; Templates</h2>`;
-  html += `<h3>Daily Checklists</h3><p class="muted">Reusable checklists that reset each day — school bag, sports bag, sleepover bag...</p>`;
+function renderChecklists(){
+  let html = `<h2>🎒 Checklists</h2><p class="muted">Reusable checklists that reset each day — school bag, sports bag, sleepover bag...</p>`;
   if(state.lists.length===0){ html += `<div class="card empty">No lists yet. Create one below!</div>`; }
   state.lists.forEach(l=>{
     const doneCount = l.items.filter(i=>i.checked).length;
@@ -923,8 +997,11 @@ function renderLists(){
     <div class="row"><input id="newListName" placeholder="e.g. Basketball Bag" style="flex:1;">
     <button id="addListBtn">Create</button></div>
   </div>`;
+  return html;
+}
 
-  html += `<h3 style="margin-top:22px;">📋 Event Templates</h3><p class="muted">Reusable step plans for things you plan for again and again — birthdays, sleepovers, trips. Build one here, then use it as a starting point when you create a new event (customize it per event — templates stay untouched).</p>`;
+function renderTemplates(){
+  let html = `<h2>📋 Event Templates</h2><p class="muted">Reusable step plans for things you plan for again and again — birthdays, sleepovers, trips. Build one here, then use it as a starting point when you create a new event (customize it per event — templates stay untouched).</p>`;
   if(state.questTemplates.length===0){ html += `<div class="card empty">No templates yet. Create one below!</div>`; }
   state.questTemplates.forEach(tpl=>{
     html += `<div class="card">
@@ -1002,7 +1079,7 @@ function renderQuests(){
         ${state.questTemplates.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}
       </select>
     </div>
-    <p class="small muted">${state.questTemplates.length? 'Pick a template to start from its steps, or start blank.' : 'No templates yet — create one in the Lists tab, or just start blank and add steps here.'} You can add, remove, rename, or reschedule steps any time.</p>
+    <p class="small muted">${state.questTemplates.length? 'Pick a template to start from its steps, or start blank.' : 'No templates yet — create one under Lists → Event Templates, or just start blank and add steps here.'} You can add, remove, rename, or reschedule steps any time.</p>
     <div style="margin-top:10px;"><button id="addQuestBtn">Create Event</button></div>
   </div>`;
   return html;
@@ -1197,12 +1274,15 @@ function render(){
   if(!state.setupDone){ renderSetup(); return; }
 
   let body = '';
-  if(currentTab==='home') body = renderHome();
-  else if(currentTab==='calendar') body = renderCalendar();
+  if(currentTab==='day') body = renderDay();
+  else if(currentTab==='week') body = renderWeek();
+  else if(currentTab==='month') body = renderMonth();
+  else if(currentTab==='reminders') body = renderReminders();
   else if(currentTab==='missions') body = renderMissions();
   else if(currentTab==='missionPlay') body = renderMissionPlay();
   else if(currentTab==='routines') body = renderRoutines();
-  else if(currentTab==='lists') body = renderLists();
+  else if(currentTab==='templates') body = renderTemplates();
+  else if(currentTab==='checklists') body = renderChecklists();
   else if(currentTab==='quests') body = renderQuests();
   else if(currentTab==='rewards') body = renderRewards();
   else if(currentTab==='settings') body = renderSettings();
@@ -1213,8 +1293,15 @@ function render(){
 
 /* ============ EVENT HANDLERS ============ */
 function attachHandlers(){
+  document.querySelectorAll('[data-navgroup]').forEach(b=>{
+    b.onclick = (e)=>{
+      e.stopPropagation();
+      openNavGroup = (openNavGroup===b.dataset.navgroup) ? null : b.dataset.navgroup;
+      render();
+    };
+  });
   document.querySelectorAll('#navtabs [data-tab]').forEach(b=>{
-    b.onclick = ()=> setTab(b.dataset.tab);
+    b.onclick = ()=>{ openNavGroup = null; setTab(b.dataset.tab); };
   });
 
   // HOME: adhoc
@@ -1271,7 +1358,7 @@ function attachHandlers(){
   const calNext = document.getElementById('calNextMonth');
   if(calNext) calNext.onclick = ()=>{ calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth()+1, 1); render(); };
   document.querySelectorAll('[data-caldate]').forEach(el=>{
-    el.onclick = ()=>{ calendarSelectedDate = el.dataset.caldate; render(); };
+    el.onclick = ()=>{ calendarSelectedDate = el.dataset.caldate; currentTab = 'day'; render(); };
   });
   const calPrevDay = document.getElementById('calPrevDay');
   if(calPrevDay) calPrevDay.onclick = ()=> shiftCalendarDay(-1);
@@ -1279,6 +1366,10 @@ function attachHandlers(){
   if(calNextDay) calNextDay.onclick = ()=> shiftCalendarDay(1);
   const calJumpToday = document.getElementById('calJumpToday');
   if(calJumpToday) calJumpToday.onclick = ()=>{ calendarSelectedDate = todayStr(); calendarViewDate = new Date(); render(); };
+  const weekPrev = document.getElementById('weekPrev');
+  if(weekPrev) weekPrev.onclick = ()=>{ const d=new Date(calendarSelectedDate+'T00:00:00'); d.setDate(d.getDate()-7); calendarSelectedDate = todayStr(d); render(); };
+  const weekNext = document.getElementById('weekNext');
+  if(weekNext) weekNext.onclick = ()=>{ const d=new Date(calendarSelectedDate+'T00:00:00'); d.setDate(d.getDate()+7); calendarSelectedDate = todayStr(d); render(); };
 
   // ROUTINES: add
   const addRoutineBtn = document.getElementById('addRoutineBtn');
@@ -1590,7 +1681,7 @@ function attachHandlers(){
     if(confirm('Are you sure? This deletes everything.')){
       state = defaultState();
       saveState();
-      currentTab='home';
+      currentTab='day';
       render();
     }
   };
