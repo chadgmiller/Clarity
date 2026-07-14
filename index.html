@@ -128,7 +128,28 @@ let saveTimer = null;
 async function loadStateFromServer(){
   const { data, error } = await sb.from('app_state').select('state').eq('user_id', currentUser.id).maybeSingle();
   if(error){ console.error('Failed to load state', error); }
-  state = (data && data.state && Object.keys(data.state).length) ? data.state : defaultState();
+  const loaded = (data && data.state && Object.keys(data.state).length) ? data.state : defaultState();
+  state = migrateState(loaded);
+  saveState(); // persist any backfilled fields so future loads don't need to migrate again
+}
+// Backfills any fields missing from older saved states (e.g. accounts created before a
+// feature existed) so new code never has to assume a field is present.
+function migrateState(s){
+  if(!s.profile) s.profile = {name:'', avatar:'🎯'};
+  if(!s.points) s.points = {balance:0, lifetime:0, lastProcessedDate:todayStr(), earnedByDate:{}};
+  if(s.points.earnedByDate===undefined) s.points.earnedByDate = {};
+  if(!s.points.lastProcessedDate) s.points.lastProcessedDate = todayStr();
+  if(!s.missions) s.missions = {completed:{}};
+  if(!s.routines) s.routines = [];
+  if(!s.lists) s.lists = [];
+  if(!s.quests) s.quests = [];
+  if(!s.questTemplates) s.questTemplates = [];
+  if(!s.adhoc) s.adhoc = [];
+  if(!s.rewards) s.rewards = DEFAULT_REWARDS.map(r=>({id:uidSafe(), name:r.name, cost:r.cost}));
+  if(!s.redeemedLog) s.redeemedLog = [];
+  if(!s.notifications) s.notifications = {enabled:false, lastCheckedMinute:''};
+  if(!s.notifiedToday) s.notifiedToday = {};
+  return s;
 }
 function saveState(){
   clearTimeout(saveTimer);
