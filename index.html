@@ -162,6 +162,8 @@ function migrateState(s){
   if(!s.redeemedLog) s.redeemedLog = [];
   if(!s.notifications) s.notifications = {enabled:false, lastCheckedMinute:''};
   if(!s.notifiedToday) s.notifiedToday = {};
+  if(!s.history) s.history = [];
+  if(!s.weeklyReflections) s.weeklyReflections = [];
   return s;
 }
 function saveState(){
@@ -215,7 +217,9 @@ function defaultState(){
     rewards: DEFAULT_REWARDS.map(r=>({id:uidSafe(), name:r.name, cost:r.cost})),
     redeemedLog:[],   // {id,name,cost,date}
     notifications:{enabled:false, lastCheckedMinute:''},
-    notifiedToday:{}  // key -> date string, to avoid repeat notifications
+    notifiedToday:{}, // key -> date string, to avoid repeat notifications
+    history:[],       // {date,earned,missed,net,completed:[{type,name}],missedItems:[{type,name}]} — last ~90 days
+    weeklyReflections:[] // {weekStartDate,selectedReasons:[...],note,tryNext,tryNextNote}
   };
 }
 function uidSafe(){ return Math.random().toString(36).slice(2,10); }
@@ -411,6 +415,7 @@ function topBar(){
     {id:'lists', label:'Lists', children:[['templates','Event Templates'],['checklists','Checklists']]},
   ];
   const soloTabs = [
+    ['weekly','This Week'],
     ['missions','Practice'],
     ['rewards','Rewards'],
     ['settings','Settings'],
@@ -1164,30 +1169,52 @@ function questStepDueStr(q,s){
 function processDayMisses(dStr){
   let missed = 0;
   const wname = dayName(new Date(dStr+'T00:00:00'));
+  const completed = [];
+  const missedItems = [];
 
   state.routines.forEach(r=>{
-    if(r.days.includes(wname) && r.lastDoneDate!==dStr){
-      missed += POINTS.routineMiss;
-      r.streak = 0;
+    if(r.days.includes(wname)){
+      if(r.lastDoneDate===dStr){
+        completed.push({type:'routine', name:r.name});
+      } else {
+        missed += POINTS.routineMiss;
+        missedItems.push({type:'routine', name:r.name});
+        r.streak = 0;
+      }
     }
   });
   state.adhoc.forEach(a=>{
-    if(a.date===dStr && !a.done && !a.penalized){
-      missed += POINTS.adhocMiss;
-      a.penalized = true;
+    if(a.date===dStr){
+      if(a.done){
+        completed.push({type:'reminder', name:a.name});
+      } else if(!a.penalized){
+        missed += POINTS.adhocMiss;
+        missedItems.push({type:'reminder', name:a.name});
+        a.penalized = true;
+      }
     }
   });
   state.quests.forEach(q=>{
     q.steps.forEach(s=>{
-      if(!s.done && !s.penalized && questStepDueStr(q,s)===dStr){
-        missed += POINTS.questStepMiss;
-        s.penalized = true;
+      if(questStepDueStr(q,s)===dStr){
+        if(s.done){
+          completed.push({type:'event step', name:`${q.name}: ${s.name}`});
+        } else if(!s.penalized){
+          missed += POINTS.questStepMiss;
+          missedItems.push({type:'event step', name:`${q.name}: ${s.name}`});
+          s.penalized = true;
+        }
       }
     });
   });
   state.lists.forEach(l=>{
-    if(l.lastReset===dStr && l.items.some(it=>!it.checked)){
-      missed += POINTS.listMiss;
+    if(l.lastReset===dStr){
+      if(l.items.some(it=>!it.checked)){
+        missed += POINTS.listMiss;
+        missedItems.push({type:'list', name:l.name});
+      } else if(l.items.length>0){
+        completed.push({type:'list', name:l.name});
+      }
     }
   });
 
@@ -1200,7 +1227,13 @@ function processDayMisses(dStr){
     if(state.points.lifetime<0) state.points.lifetime=0;
   }
   if(state.points.earnedByDate) delete state.points.earnedByDate[dStr];
-  return {earned, missed, net: earned-applied};
+
+  const net = earned-applied;
+  state.history = state.history || [];
+  state.history.push({date:dStr, earned, missed, net, completed, missedItems});
+  if(state.history.length>90){ state.history.splice(0, state.history.length-90); }
+
+  return {earned, missed, net};
 }
 function processRollover(){
   const today = todayStr();
@@ -1220,6 +1253,131 @@ function processRollover(){
   if(daysProcessed>0 && (totalEarned>0 || totalMissed>0)){
     window._rolloverSummary = {totalEarned, totalMissed, totalNet};
   }
+}
+
+/* ============ WEEKLY REVIEW ============ */
+const REFLECTION_REASONS = ['Forgot','Too busy',"Didn't want to",'Something came up','Other'];
+const TRY_NEXT_OPTIONS = ['Set an earlier reminder','Put it by the door','Ask for a heads-up the night before','Other'];
+const WEEKDAY_PLURAL = {Mon:'Mondays',Tue:'Tuesdays',Wed:'Wednesdays',Thu:'Thursdays',Fri:'Fridays',Sat:'Saturdays',Sun:'Sundays'};
+const TYPE_LABELS = {routine:'Routines', reminder:'Reminders', list:'Lists', 'event step':'Event steps'};
+
+function currentWeekStart(){ return todayStr(startOfWeek(todayStr())); }
+
+function getWeeklyReflection(weekStartDate){
+  return (state.weeklyReflections||[]).find(w=>w.weekStartDate===weekStartDate);
+}
+
+function upsertWeeklyReflection(patch){
+  const weekStartDate = currentWeekStart();
+  state.weeklyReflections = state.weeklyReflections || [];
+  let entry = getWeeklyReflection(weekStartDate);
+  if(!entry){
+    entry = {weekStartDate, selectedReasons:[], note:'', tryNext:'', tryNextNote:''};
+    state.weeklyReflections.push(entry);
+  }
+  Object.assign(entry, patch);
+  saveState();
+  return entry;
+}
+
+function summarizeHistory(entries){
+  let earned=0, missed=0, net=0;
+  const byType = {};
+  entries.forEach(e=>{
+    earned += e.earned; missed += e.missed; net += e.net;
+    (e.completed||[]).forEach(item=>{
+      byType[item.type] = byType[item.type] || {completed:0, missed:0};
+      byType[item.type].completed++;
+    });
+    (e.missedItems||[]).forEach(item=>{
+      byType[item.type] = byType[item.type] || {completed:0, missed:0};
+      byType[item.type].missed++;
+    });
+  });
+  const totalCompleted = Object.values(byType).reduce((s,x)=>s+x.completed,0);
+  const totalScheduled = Object.values(byType).reduce((s,x)=>s+x.completed+x.missed,0);
+  return {earned, missed, net, byType, totalCompleted, totalScheduled};
+}
+
+// Surfaces routines with a high miss rate on a specific weekday, e.g. "missed Piano
+// practice 3 of the last 4 Fridays" — a gentle nudge toward a concrete pattern rather
+// than a vague sense of falling behind.
+function findRoutinePatterns(){
+  const counts = {};
+  (state.history||[]).forEach(e=>{
+    const wname = dayName(new Date(e.date+'T00:00:00'));
+    (e.missedItems||[]).forEach(item=>{
+      if(item.type!=='routine') return;
+      const key = item.name+'|'+wname;
+      counts[key] = counts[key] || {name:item.name, weekday:wname, missed:0, total:0};
+      counts[key].missed++; counts[key].total++;
+    });
+    (e.completed||[]).forEach(item=>{
+      if(item.type!=='routine') return;
+      const key = item.name+'|'+wname;
+      counts[key] = counts[key] || {name:item.name, weekday:wname, missed:0, total:0};
+      counts[key].total++;
+    });
+  });
+  return Object.values(counts)
+    .filter(c=> c.missed>=3 && c.total>=4 && c.missed/c.total>=0.6)
+    .sort((a,b)=> (b.missed/b.total)-(a.missed/a.total));
+}
+
+function renderWeeklyReview(){
+  const weekEntries = (state.history||[]).slice(-7);
+  const summary = summarizeHistory(weekEntries);
+  const weekStart = currentWeekStart();
+  const reflection = getWeeklyReflection(weekStart) || {weekStartDate:weekStart, selectedReasons:[], note:'', tryNext:'', tryNextNote:''};
+
+  let html = `<h2>This Week</h2><p class="muted">A look back — not a scoreboard, just useful signal for what to try differently.</p>`;
+
+  if(weekEntries.length===0){
+    html += `<div class="card empty">No days recorded yet. Come back after your first full day and this'll start filling in.</div>`;
+  } else {
+    const pct = summary.totalScheduled>0 ? Math.round(summary.totalCompleted/summary.totalScheduled*100) : null;
+    html += `<div class="card">
+      <h3>Last ${weekEntries.length} day${weekEntries.length===1?'':'s'}</h3>
+      <div class="row" style="gap:28px;">
+        <div><div class="muted small">Earned</div><div style="font-size:20px;font-weight:700;">${summary.earned} pts</div></div>
+        <div><div class="muted small">Lost to misses</div><div style="font-size:20px;font-weight:700;">${summary.missed} pts</div></div>
+        <div><div class="muted small">Net</div><div style="font-size:20px;font-weight:700;">${summary.net>=0?'+':''}${summary.net} pts</div></div>
+        ${pct!==null? `<div><div class="muted small">Completed</div><div style="font-size:20px;font-weight:700;">${pct}%</div></div>` : ''}
+      </div>
+    </div>`;
+
+    const typeRows = Object.keys(TYPE_LABELS).filter(t=>summary.byType[t]).map(t=>{
+      const x = summary.byType[t];
+      return `<div class="task-item"><div class="flex-fill">${TYPE_LABELS[t]}</div><div class="muted small">${x.completed} of ${x.completed+x.missed} done</div></div>`;
+    }).join('');
+    if(typeRows){
+      html += `<div class="card"><h3>By category</h3>${typeRows}</div>`;
+    }
+
+    const patterns = findRoutinePatterns();
+    if(patterns.length){
+      html += `<div class="card"><h3>Noticing a pattern</h3>`;
+      patterns.slice(0,2).forEach(p=>{
+        html += `<p class="small" style="margin:4px 0;">You've missed <b>${p.name}</b> ${p.missed} of the last ${p.total} ${WEEKDAY_PLURAL[p.weekday]}.</p>`;
+      });
+      html += `</div>`;
+    }
+  }
+
+  html += `<div class="card">
+    <h3>What got in the way this week?</h3>
+    <p class="muted small">No wrong answer — tap whatever fits, or skip this entirely.</p>
+    <div>${REFLECTION_REASONS.map(r=>`<span class="chip ${reflection.selectedReasons.includes(r)?'selected':''}" data-reason="${r}">${r}</span>`).join('')}</div>
+    ${reflection.selectedReasons.includes('Other') ? `<input id="reflectNote" placeholder="Say more (optional)" style="width:100%;margin-top:10px;" value="${(reflection.note||'').replace(/"/g,'&quot;')}">` : ''}
+  </div>`;
+
+  html += `<div class="card">
+    <h3>One thing to try next week?</h3>
+    <div>${TRY_NEXT_OPTIONS.map(o=>`<span class="chip ${reflection.tryNext===o?'selected':''}" data-trynext="${o}">${o}</span>`).join('')}</div>
+    ${reflection.tryNext==='Other' ? `<input id="tryNextNote" placeholder="What will you try? (optional)" style="width:100%;margin-top:10px;" value="${(reflection.tryNextNote||'').replace(/"/g,'&quot;')}">` : ''}
+  </div>`;
+
+  return html;
 }
 
 /* ============ NOTIFICATIONS ============ */
@@ -1282,6 +1440,7 @@ function render(){
 
   let body = '';
   if(currentTab==='day') body = renderDay();
+  else if(currentTab==='weekly') body = renderWeeklyReview();
   else if(currentTab==='week') body = renderWeek();
   else if(currentTab==='month') body = renderMonth();
   else if(currentTab==='reminders') body = renderReminders();
@@ -1373,6 +1532,33 @@ function attachHandlers(){
   if(calNextDay) calNextDay.onclick = ()=> shiftCalendarDay(1);
   const calJumpToday = document.getElementById('calJumpToday');
   if(calJumpToday) calJumpToday.onclick = ()=>{ calendarSelectedDate = todayStr(); calendarViewDate = new Date(); render(); };
+
+  // WEEKLY REVIEW
+  document.querySelectorAll('[data-reason]').forEach(el=>{
+    el.onclick = ()=>{
+      const weekStart = currentWeekStart();
+      const entry = getWeeklyReflection(weekStart);
+      const reasons = new Set(entry ? entry.selectedReasons : []);
+      const val = el.dataset.reason;
+      if(reasons.has(val)) reasons.delete(val); else reasons.add(val);
+      upsertWeeklyReflection({selectedReasons:Array.from(reasons)});
+      render();
+    };
+  });
+  document.querySelectorAll('[data-trynext]').forEach(el=>{
+    el.onclick = ()=>{
+      const weekStart = currentWeekStart();
+      const entry = getWeeklyReflection(weekStart);
+      const val = el.dataset.trynext;
+      const newVal = (entry && entry.tryNext===val) ? '' : val; // tap again to deselect
+      upsertWeeklyReflection({tryNext:newVal});
+      render();
+    };
+  });
+  const reflectNote = document.getElementById('reflectNote');
+  if(reflectNote) reflectNote.onchange = ()=>{ upsertWeeklyReflection({note:reflectNote.value}); };
+  const tryNextNote = document.getElementById('tryNextNote');
+  if(tryNextNote) tryNextNote.onchange = ()=>{ upsertWeeklyReflection({tryNextNote:tryNextNote.value}); };
   const weekPrev = document.getElementById('weekPrev');
   if(weekPrev) weekPrev.onclick = ()=>{ const d=new Date(calendarSelectedDate+'T00:00:00'); d.setDate(d.getDate()-7); calendarSelectedDate = todayStr(d); render(); };
   const weekNext = document.getElementById('weekNext');
