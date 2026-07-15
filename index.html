@@ -554,7 +554,7 @@ function renderDay(){
     adhoc.forEach(a=>{
       html += `<div class="task-item ${a.done?'done':''}">
         <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-        <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+        <div class="flex-fill">${a.name} ${a.time?`<span class="muted small">${a.time}</span>`:''} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
         <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
       </div>`;
     });
@@ -626,7 +626,7 @@ function renderReminders(){
     list.forEach(a=>{
       h += `<div class="task-item ${a.done?'done':''}">
         <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-        <div class="flex-fill">${a.name} <span class="muted small">${fmtDate(a.date)}</span></div>
+        <div class="flex-fill">${a.name} <span class="muted small">${fmtDate(a.date)}${a.time?' at '+a.time:''}</span></div>
         <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
       </div>`;
     });
@@ -646,8 +646,10 @@ function renderReminders(){
     <div class="row">
       <input id="newAdhoc" placeholder="e.g. Bring shoes" style="flex:1;min-width:180px;">
       <input type="date" id="newAdhocDate" value="${todayStr()}">
+      <input type="time" id="newAdhocTime">
       <button id="addAdhocBtn">Add</button>
     </div>
+    <p class="muted small" style="margin-top:6px;">Time is optional — set one if you want a pop-up reminder at that moment (needs notifications turned on in Settings).</p>
   </div>`;
   return html;
 }
@@ -1475,8 +1477,10 @@ function attachHandlers(){
   if(addAdhocBtn) addAdhocBtn.onclick = ()=>{
     const name = document.getElementById('newAdhoc').value.trim();
     const date = document.getElementById('newAdhocDate').value || todayStr();
+    const timeInput = document.getElementById('newAdhocTime');
+    const time = (timeInput && timeInput.value) ? timeInput.value : null;
     if(!name) return;
-    state.adhoc.push({id:uid(), name, date, time:null, done:false, penalized:false});
+    state.adhoc.push({id:uid(), name, date, time, done:false, penalized:false});
     saveState(); render();
   };
   document.querySelectorAll('[data-adhoc]').forEach(el=>{
