@@ -152,8 +152,9 @@ function migrateState(s){
   if(!s.points) s.points = {balance:0, lifetime:0, lastProcessedDate:todayStr(), earnedByDate:{}};
   if(s.points.earnedByDate===undefined) s.points.earnedByDate = {};
   if(!s.points.lastProcessedDate) s.points.lastProcessedDate = todayStr();
-  if(!s.missions) s.missions = {completed:{}, claimedDate:null};
+  if(!s.missions) s.missions = {completed:{}, claimedDate:null, history:[]};
   if(s.missions.claimedDate===undefined) s.missions.claimedDate = null;
+  if(!s.missions.history) s.missions.history = [];
   if(!s.routines) s.routines = [];
   if(!s.lists) s.lists = [];
   if(!s.quests) s.quests = [];
@@ -209,7 +210,7 @@ function defaultState(){
     setupDone:false,
     profile:{name:'', avatar:'🎯'},
     points:{balance:0, lifetime:0, lastProcessedDate:todayStr(), earnedByDate:{}},
-    missions:{ completed:{}, claimedDate:null }, // claimedDate gates today's challenge to one attempt
+    missions:{ completed:{}, claimedDate:null, history:[] }, // claimedDate gates today's challenge to one attempt; history is one entry per claimed day
     routines:[],      // {id,name,icon,days:['Mon',...],time,streak,lastDoneDate}
     lists:[],         // {id,name,items:[{id,name,checked}],lastReset}
     quests:[],        // {id,name,eventDate,steps:[{id,name,dueOffsetDays,done}]}
@@ -882,6 +883,21 @@ function renderMissions(){
   if(lockedCount>0){
     html += `<p class="muted small">${lockedCount} more badge${lockedCount===1?'':'s'} still to earn — a new challenge shows up here every day.</p>`;
   }
+
+  if(state.missions.history.length){
+    html += `<div class="card"><h3>Past challenges</h3>`;
+    state.missions.history.forEach(h=>{
+      html += `<div class="task-item" style="align-items:flex-start;">
+        <div class="flex-fill">
+          <div><b>${h.emoji} ${h.title}</b> <span class="muted small">${fmtDate(h.date)}</span> ${h.optimal?'<span class="badge">Optimal</span>':''}</div>
+          <div class="small muted" style="margin-top:2px;">${h.answer}</div>
+        </div>
+        <span class="pill coin">+${h.points}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
   return html;
 }
 
@@ -1084,6 +1100,34 @@ function isMissionOptimal(){
   return false;
 }
 
+// Turns the raw answer state for whatever mission type just finished into a plain-text
+// summary, so it can be stored in history and read back later without keeping the
+// full mission-play state (which resets each time) around.
+function summarizeMissionAnswer(m, ms){
+  if(m.type==='select'){
+    const correct = ms.packed.filter(n=>CAMP_ITEMS.find(i=>i.name===n).need).length;
+    const junk = ms.packed.length - correct;
+    return `Packed: ${ms.packed.join(', ')||'(nothing)'} — ${correct} useful item${correct===1?'':'s'}${junk?`, ${junk} you didn't need`:''}.`;
+  }
+  if(m.type==='sequence'){
+    const numCorrect = ms.picked.filter((s,i)=>s===ms.correctOrder[i]).length;
+    return `Your order: ${ms.picked.join(' → ')} (${numCorrect}/${ms.correctOrder.length} in the right spot).`;
+  }
+  if(m.type==='budget'){
+    const total = ms.selected.reduce((sum,n)=>sum+ms.optional.find(o=>o.name===n).min,0);
+    return `Picked: ${ms.selected.join(', ')||'(nothing)'} — ${total} of ${45-24} min used.`;
+  }
+  if(m.type==='assign'){
+    return ms.tasks.map(t=>`${t.name}: ${t.assigned===null?'not set':(t.assigned===0?'day of':t.assigned+'d before')}`).join('; ')+'.';
+  }
+  if(m.type==='priority'){
+    const yours = computeElapsed(ms.order, ms.tasks);
+    const best = computeElapsed(bestPriorityOrder(ms.tasks), ms.tasks);
+    return `Your order: ${ms.order.join(' → ')} (${yours} min${yours>best?`, fastest is ${best} min`:''}).`;
+  }
+  return '';
+}
+
 function claimMissionReward(){
   if(state.missions.claimedDate === todayStr()){
     toast("Already done for today — come back tomorrow!");
@@ -1101,6 +1145,17 @@ function claimMissionReward(){
     total += pts.badge;
   }
   state.missions.claimedDate = todayStr();
+  state.missions.history.unshift({
+    date: todayStr(),
+    missionId: id,
+    title: m.title,
+    emoji: m.emoji,
+    difficulty: m.difficulty,
+    optimal,
+    points: total,
+    answer: summarizeMissionAnswer(m, missionState),
+  });
+  if(state.missions.history.length>90) state.missions.history.length = 90;
   saveState();
   celebrate(firstTime ? 'New badge earned!' : (optimal ? 'Nailed it!' : 'Nice work!'), total);
   currentTab='missions'; missionState=null; render();
