@@ -152,7 +152,8 @@ function migrateState(s){
   if(!s.points) s.points = {balance:0, lifetime:0, lastProcessedDate:todayStr(), earnedByDate:{}};
   if(s.points.earnedByDate===undefined) s.points.earnedByDate = {};
   if(!s.points.lastProcessedDate) s.points.lastProcessedDate = todayStr();
-  if(!s.missions) s.missions = {completed:{}};
+  if(!s.missions) s.missions = {completed:{}, claimedDate:null};
+  if(s.missions.claimedDate===undefined) s.missions.claimedDate = null;
   if(!s.routines) s.routines = [];
   if(!s.lists) s.lists = [];
   if(!s.quests) s.quests = [];
@@ -208,7 +209,7 @@ function defaultState(){
     setupDone:false,
     profile:{name:'', avatar:'🎯'},
     points:{balance:0, lifetime:0, lastProcessedDate:todayStr(), earnedByDate:{}},
-    missions:{ completed:{} },
+    missions:{ completed:{}, claimedDate:null }, // claimedDate gates today's challenge to one attempt
     routines:[],      // {id,name,icon,days:['Mon',...],time,streak,lastDoneDate}
     lists:[],         // {id,name,items:[{id,name,checked}],lastReset}
     quests:[],        // {id,name,eventDate,steps:[{id,name,dueOffsetDays,done}]}
@@ -773,38 +774,114 @@ function renderWeek(){
 }
 
 /* ============ MISSIONS (LEVEL 1) ============ */
+// type drives which generic play/scoring UI a mission uses:
+//   select   — pick items into a limited slot (camp)
+//   sequence — put shuffled steps in the one correct order, with reasoning explaining why
+//   budget   — fit optional items into a fixed time budget (clock)
+//   assign   — assign lead time to each task before a deadline (party)
+//   priority — decide what ORDER to start several tasks, some of which run unattended
+//              once started ("passive") — the lesson is starting those first so they run
+//              in the background while you do the active ones, not doing everything serially.
 const MISSIONS = [
   {
-    id:'camp', title:'Pack for Overnight Camping', badge:'Packing Pro', emoji:'🏕️',
+    id:'camp', type:'select', difficulty:'Easy', title:'Pack for Overnight Camping', badge:'Packing Pro', emoji:'🏕️',
     desc:'You have a 6-slot backpack. Pick only what you really need!',
   },
   {
-    id:'movie', title:'Movie Night Sequencer', badge:'Sequencer', emoji:'🎬',
+    id:'movie', type:'sequence', difficulty:'Easy', title:'Movie Night Sequencer', badge:'Sequencer', emoji:'🎬',
     desc:'Put the steps of planning a movie night in the right order.',
+    steps:['Decide who to invite','Pick a movie','Send invites','Buy snacks','Clean up the living room'],
+    reasoning:"You can't invite people to a movie you haven't picked yet, and you can't send invites before deciding who's coming. Snacks make sense once invites are out and you roughly know the group — cleaning up only makes sense at the very end.",
   },
   {
-    id:'clock', title:'Beat the Clock', badge:'Time Wizard', emoji:'⏰',
+    id:'clock', type:'budget', difficulty:'Medium', title:'Beat the Clock', badge:'Time Wizard', emoji:'⏰',
     desc:'You only have 45 minutes before school. Choose what fits!',
   },
   {
-    id:'party', title:'Plan-a-Party Countdown', badge:'Event Planner', emoji:'🎉',
+    id:'party', type:'assign', difficulty:'Medium', title:'Plan-a-Party Countdown', badge:'Event Planner', emoji:'🎉',
     desc:'The party is in 10 days. Decide when to do each task.',
+  },
+  {
+    id:'laundry', type:'priority', difficulty:'Easy', title:'Laundry & Trash Day', badge:'Multi-Tasker', emoji:'🧺',
+    desc:"Get four chores done as fast as you can — the order you start them in changes how long it takes.",
+    tasks:[
+      {name:'Start the laundry', duration:40, passive:true},
+      {name:'Take out the garbage', duration:5, passive:false},
+      {name:'Load the dishwasher', duration:8, passive:false},
+      {name:'Wipe the counters', duration:4, passive:false},
+    ],
+  },
+  {
+    id:'breakfast', type:'priority', difficulty:'Medium', title:'School Morning Multi-Task', badge:'Morning Master', emoji:'🍳',
+    desc:'Get ready for school as fast as you can.',
+    tasks:[
+      {name:'Start the toaster oven', duration:6, passive:true},
+      {name:'Brush teeth', duration:3, passive:false},
+      {name:'Pack backpack', duration:5, passive:false},
+      {name:'Feed the pet', duration:4, passive:false},
+    ],
+  },
+  {
+    id:'satchores', type:'priority', difficulty:'Hard', title:'Rainy Saturday Chores', badge:'Chore Champion', emoji:'🌧️',
+    desc:'Two things need to run in the background this time — figure out which ones.',
+    tasks:[
+      {name:'Start the dishwasher', duration:60, passive:true},
+      {name:'Put the tablet on the charger', duration:90, passive:true},
+      {name:'Vacuum the living room', duration:12, passive:false},
+      {name:'Clean your room', duration:25, passive:false},
+      {name:'Water the plants', duration:5, passive:false},
+    ],
+  },
+  {
+    id:'science', type:'sequence', difficulty:'Hard', title:'Science Fair Project', badge:'Researcher', emoji:'🔬',
+    desc:'Put the steps of a science fair project in the right order.',
+    steps:['Pick a topic','Research the topic','Design the experiment','Run the experiment','Write up the results','Make the poster'],
+    reasoning:"You need a topic before you can research it, and that research before you can design a fair experiment. The experiment has to actually happen before you can write up what happened — the poster comes last because it summarizes everything else.",
   },
 ];
 
+const MISSION_POINTS = {
+  Easy:   {complete:8,  optimal:8,  badge:15},
+  Medium: {complete:10, optimal:12, badge:20},
+  Hard:   {complete:12, optimal:18, badge:30},
+};
+
+// Deterministic by date so everyone sees the same "today's challenge" and it's stable
+// across reloads/re-renders within the same day.
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h; }
+function getTodaysMission(){ return MISSIONS[hashStr(todayStr()) % MISSIONS.length]; }
+
 function renderMissions(){
-  let html = `<h2>Practice Missions</h2><p class="muted">Low-stakes games to build your planning brain. No real deadlines here!</p>`;
-  html += `<div class="grid-cards">`;
-  MISSIONS.forEach(m=>{
-    const done = state.missions.completed[m.id];
-    html += `<div class="card mission-card" data-mission="${m.id}">
-      <div style="font-size:40px;">${m.emoji}</div>
-      <h3>${m.title}</h3>
-      <p class="small muted">${m.desc}</p>
-      ${done? `<span class="badge">🏅 ${m.badge} earned!</span>` : `<span class="badge locked">🔒 ${m.badge}</span>`}
-    </div>`;
-  });
-  html += `</div>`;
+  const today = getTodaysMission();
+  const claimedToday = state.missions.claimedDate === todayStr();
+  let html = `<h2>Practice Missions</h2><p class="muted">One low-stakes challenge a day to build your planning brain.</p>`;
+
+  html += `<div class="card">
+    <div class="row between">
+      <h3 style="margin:0;">Today's Challenge</h3>
+      <span class="badge">${today.difficulty}</span>
+    </div>
+    <div style="font-size:40px;">${today.emoji}</div>
+    <h2 style="margin:4px 0;">${today.title}</h2>
+    <p class="small muted">${today.desc}</p>
+    ${claimedToday
+      ? `<span class="badge">Done for today — a new one shows up tomorrow</span>`
+      : `<button class="green" data-mission="${today.id}">Start Today's Challenge</button>`}
+  </div>`;
+
+  const earnedIds = Object.keys(state.missions.completed).filter(id=>state.missions.completed[id]);
+  if(earnedIds.length){
+    html += `<div class="card"><h3>Badges earned</h3><div class="row">`;
+    earnedIds.forEach(id=>{
+      const mm = MISSIONS.find(x=>x.id===id);
+      if(mm) html += `<span class="badge">${mm.emoji} ${mm.badge}</span>`;
+    });
+    html += `</div></div>`;
+  }
+  const lockedCount = MISSIONS.length - earnedIds.length;
+  if(lockedCount>0){
+    html += `<p class="muted small">${lockedCount} more badge${lockedCount===1?'':'s'} still to earn — a new challenge shows up here every day.</p>`;
+  }
   return html;
 }
 
@@ -812,18 +889,17 @@ function renderMissions(){
 let missionState = null;
 
 function startMission(id){
-  if(id==='camp'){
+  const m = MISSIONS.find(x=>x.id===id);
+  if(m.type==='select'){
     missionState = {id, packed:[], done:false};
-  } else if(id==='movie'){
-    const steps = ['Decide who to invite','Pick a movie','Send invites','Buy snacks','Clean up the living room'];
-    const correctOrder = steps.slice();
-    missionState = {id, shuffled: shuffle(steps.slice()), picked:[], correctOrder, done:false};
-  } else if(id==='clock'){
+  } else if(m.type==='sequence'){
+    missionState = {id, shuffled: shuffle(m.steps.slice()), picked:[], correctOrder:m.steps.slice(), done:false};
+  } else if(m.type==='budget'){
     missionState = {id, must:['Brush teeth (5m)','Get dressed (7m)','Eat breakfast (12m)'], optional:[
       {name:'Play video games (20m)', min:20}, {name:'Watch a show (15m)', min:15},
       {name:'Find backpack + shoes (6m)', min:6}, {name:'Pack lunch (8m)', min:8}
     ], selected:[], done:false};
-  } else if(id==='party'){
+  } else if(m.type==='assign'){
     missionState = {id, tasks:[
       {name:'Pick out a gift', assigned:null, ideal:5},
       {name:'Wrap the gift', assigned:null, ideal:1},
@@ -831,11 +907,33 @@ function startMission(id){
       {name:'Ask parents for a ride', assigned:null, ideal:4},
       {name:'Double check time & address', assigned:null, ideal:0},
     ], done:false};
+  } else if(m.type==='priority'){
+    missionState = {id, tasks: m.tasks.map(t=>({...t})), order:[], done:false};
   }
   currentTab = 'missionPlay';
   render();
 }
 function shuffle(arr){ for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+
+// Simulates how long a set of tasks takes to all finish given the order you START them
+// in: active tasks occupy your attention serially, but a passive task's clock keeps
+// running in the background once started, regardless of what you do afterward.
+function computeElapsed(order, tasks){
+  let clock = 0, passiveFinish = 0;
+  order.forEach(name=>{
+    const t = tasks.find(x=>x.name===name);
+    if(!t) return;
+    if(t.passive){ passiveFinish = Math.max(passiveFinish, clock + t.duration); }
+    else { clock += t.duration; }
+  });
+  return Math.max(clock, passiveFinish);
+}
+// Starting every passive task before any active one is always at least as fast as any
+// other order (each passive task's finish time is minimized by starting it at clock=0),
+// so this is a true optimum, not just a heuristic — good for scoring, not just a hint.
+function bestPriorityOrder(tasks){
+  return tasks.filter(t=>t.passive).map(t=>t.name).concat(tasks.filter(t=>!t.passive).map(t=>t.name));
+}
 
 const CAMP_ITEMS = [
   {name:'Tent', need:true}, {name:'Flashlight', need:true}, {name:'Sleeping bag', need:true},
@@ -849,7 +947,7 @@ function renderMissionPlay(){
   const m = MISSIONS.find(x=>x.id===missionState.id);
   let inner = '';
 
-  if(missionState.id==='camp'){
+  if(m.type==='select'){
     inner = `<p>Tap up to 6 items to pack. Chosen: ${missionState.packed.length}/6</p>
       <div class="row">${CAMP_ITEMS.map(it=>{
         const sel = missionState.packed.includes(it.name);
@@ -861,14 +959,15 @@ function renderMissionPlay(){
       const correct = missionState.packed.filter(n=>CAMP_ITEMS.find(i=>i.name===n).need).length;
       const junk = missionState.packed.filter(n=>!CAMP_ITEMS.find(i=>i.name===n).need).length;
       const missedNeeded = CAMP_ITEMS.filter(i=>i.need && !missionState.packed.includes(i.name)).length;
-      inner += `<div class="card" style="margin-top:14px;background:var(--accent-soft);">
+      const optimal = correct===6 && junk===0;
+      inner += `<div class="card" style="margin-top:14px;background:${optimal?'var(--accent-soft)':'var(--warn-soft)'};">
         <p>You packed <b>${correct}</b> good items${junk?`, but also ${junk} things you didn't need`:''}${missedNeeded?`, and missed ${missedNeeded} useful item(s)`:''}.</p>
         <p class="small muted">Real tip: before any trip, list what you'll actually use — not everything you own!</p>
       </div>`;
     }
   }
 
-  if(missionState.id==='movie'){
+  if(m.type==='sequence'){
     inner = `<p>Tap the steps in the order they should happen:</p>
       <div class="row">${missionState.shuffled.map(s=>{
         const idx = missionState.picked.indexOf(s);
@@ -878,14 +977,38 @@ function renderMissionPlay(){
       <button class="secondary" id="resetMovie">Reset</button></div>`;
     if(missionState.done){
       const numCorrect = missionState.picked.filter((s,i)=>s===missionState.correctOrder[i]).length;
-      inner += `<div class="card" style="margin-top:14px;background:var(--accent-soft);">
+      const optimal = numCorrect===missionState.correctOrder.length;
+      inner += `<div class="card" style="margin-top:14px;background:${optimal?'var(--accent-soft)':'var(--warn-soft)'};">
         <p>${numCorrect}/${missionState.correctOrder.length} in the right spot!</p>
         <p class="small">Best order: ${missionState.correctOrder.map((s,i)=>`${i+1}. ${s}`).join(' → ')}</p>
+        ${m.reasoning? `<p class="small muted">${m.reasoning}</p>` : ''}
       </div>`;
     }
   }
 
-  if(missionState.id==='clock'){
+  if(m.type==='priority'){
+    inner = `<p>Tap the tasks in the order you'd start them:</p>
+      <div class="row">${missionState.tasks.map(t=>{
+        const idx = missionState.order.indexOf(t.name);
+        return `<span class="chip ${idx>=0?'selected':''}" data-priority-task="${t.name}">${idx>=0?(idx+1)+'. ':''}${t.name} (${t.duration}m)</span>`;
+      }).join('')}</div>
+      <div style="margin-top:16px;"><button class="green" id="checkPriority" ${missionState.order.length<missionState.tasks.length?'disabled':''}>Check My Plan</button>
+      <button class="secondary" id="resetPriority">Reset</button></div>`;
+    if(missionState.done){
+      const yourElapsed = computeElapsed(missionState.order, missionState.tasks);
+      const best = bestPriorityOrder(missionState.tasks);
+      const bestElapsed = computeElapsed(best, missionState.tasks);
+      const optimal = yourElapsed===bestElapsed;
+      inner += `<div class="card" style="margin-top:14px;background:${optimal?'var(--accent-soft)':'var(--warn-soft)'};">
+        <p>${optimal
+          ? `That's the fastest way to get it all done: <b>${yourElapsed} minutes</b>.`
+          : `Your plan took <b>${yourElapsed} minutes</b>. The fastest way takes <b>${bestElapsed} minutes</b> — ${yourElapsed-bestElapsed} minutes faster.`}</p>
+        <p class="small muted">Real tip: start anything that runs on its own (laundry, dishwasher, oven, charging) first — it keeps working while you do the other stuff, instead of you waiting around for it afterward.${!optimal? ` Smart order: ${best.join(' → ')}.` : ''}</p>
+      </div>`;
+    }
+  }
+
+  if(m.type==='budget'){
     inner = `<p>You have <b>45 minutes</b>. Must-do's are locked in: brush teeth, get dressed, eat breakfast (24 min total).</p>
       <p>Pick which extra things fit in the ${45-24} minutes left:</p>
       <div class="row">${missionState.optional.map(o=>{
@@ -904,7 +1027,7 @@ function renderMissionPlay(){
     }
   }
 
-  if(missionState.id==='party'){
+  if(m.type==='assign'){
     const options = [0,1,2,3,4,5,7,10];
     inner = `<p>The party is in <b>10 days</b>. When should you do each task? (days before the party)</p>`;
     missionState.tasks.forEach((t,i)=>{
@@ -919,7 +1042,8 @@ function renderMissionPlay(){
     if(missionState.done){
       let goodCount = 0;
       missionState.tasks.forEach(t=>{ if(t.assigned!==null && t.assigned>=t.ideal) goodCount++; });
-      inner += `<div class="card" style="margin-top:14px;background:var(--accent-soft);">
+      const optimal = goodCount===missionState.tasks.length;
+      inner += `<div class="card" style="margin-top:14px;background:${optimal?'var(--accent-soft)':'var(--warn-soft)'};">
         <p>${goodCount}/${missionState.tasks.length} tasks were given enough lead time.</p>
         <p class="small muted">Real tip: gifts & rides need days of notice — cards & double-checking can wait til closer to the day.</p>
       </div>`;
@@ -937,15 +1061,48 @@ function finishMission(){
   render();
 }
 
-function claimMissionReward(){
-  const id = missionState.id;
-  if(!state.missions.completed[id]){
-    state.missions.completed[id] = true;
-    saveState();
-    celebrate('New badge earned!', 35);
-  } else {
-    celebrate('Nice replay!', 8);
+function isMissionOptimal(){
+  const m = MISSIONS.find(x=>x.id===missionState.id);
+  if(m.type==='select'){
+    const correct = missionState.packed.filter(n=>CAMP_ITEMS.find(i=>i.name===n).need).length;
+    const junk = missionState.packed.filter(n=>!CAMP_ITEMS.find(i=>i.name===n).need).length;
+    return correct===6 && junk===0;
   }
+  if(m.type==='sequence'){
+    return missionState.picked.every((s,i)=>s===missionState.correctOrder[i]);
+  }
+  if(m.type==='budget'){
+    const total = missionState.selected.reduce((sum,n)=>sum+missionState.optional.find(o=>o.name===n).min,0);
+    return total<=(45-24);
+  }
+  if(m.type==='assign'){
+    return missionState.tasks.every(t=>t.assigned!==null && t.assigned>=t.ideal);
+  }
+  if(m.type==='priority'){
+    return computeElapsed(missionState.order, missionState.tasks) === computeElapsed(bestPriorityOrder(missionState.tasks), missionState.tasks);
+  }
+  return false;
+}
+
+function claimMissionReward(){
+  if(state.missions.claimedDate === todayStr()){
+    toast("Already done for today — come back tomorrow!");
+    currentTab='missions'; missionState=null; render();
+    return;
+  }
+  const id = missionState.id;
+  const m = MISSIONS.find(x=>x.id===id);
+  const pts = MISSION_POINTS[m.difficulty] || MISSION_POINTS.Medium;
+  const optimal = isMissionOptimal();
+  let total = pts.complete + (optimal ? pts.optimal : 0);
+  const firstTime = !state.missions.completed[id];
+  if(firstTime){
+    state.missions.completed[id] = true;
+    total += pts.badge;
+  }
+  state.missions.claimedDate = todayStr();
+  saveState();
+  celebrate(firstTime ? 'New badge earned!' : (optimal ? 'Nailed it!' : 'Nice work!'), total);
   currentTab='missions'; missionState=null; render();
 }
 
@@ -1787,7 +1944,9 @@ function attachHandlers(){
   const claimBtn = document.getElementById('claimMission');
   if(claimBtn) claimBtn.onclick = claimMissionReward;
 
-  if(missionState && missionState.id==='camp'){
+  const currentMission = missionState ? MISSIONS.find(x=>x.id===missionState.id) : null;
+
+  if(currentMission && currentMission.type==='select'){
     document.querySelectorAll('[data-camp-item]').forEach(el=>{
       el.onclick = ()=>{
         const name = el.dataset.campItem;
@@ -1800,7 +1959,7 @@ function attachHandlers(){
     const checkCamp = document.getElementById('checkCamp');
     if(checkCamp) checkCamp.onclick = finishMission;
   }
-  if(missionState && missionState.id==='movie'){
+  if(currentMission && currentMission.type==='sequence'){
     document.querySelectorAll('[data-movie-step]').forEach(el=>{
       el.onclick = ()=>{
         const s = el.dataset.movieStep;
@@ -1815,7 +1974,22 @@ function attachHandlers(){
     const resetMovie = document.getElementById('resetMovie');
     if(resetMovie) resetMovie.onclick = ()=>{ missionState.picked=[]; render(); };
   }
-  if(missionState && missionState.id==='clock'){
+  if(currentMission && currentMission.type==='priority'){
+    document.querySelectorAll('[data-priority-task]').forEach(el=>{
+      el.onclick = ()=>{
+        const name = el.dataset.priorityTask;
+        const idx = missionState.order.indexOf(name);
+        if(idx>=0) missionState.order.splice(idx,1);
+        else missionState.order.push(name);
+        render();
+      };
+    });
+    const checkPriority = document.getElementById('checkPriority');
+    if(checkPriority) checkPriority.onclick = finishMission;
+    const resetPriority = document.getElementById('resetPriority');
+    if(resetPriority) resetPriority.onclick = ()=>{ missionState.order=[]; render(); };
+  }
+  if(currentMission && currentMission.type==='budget'){
     document.querySelectorAll('[data-clock-item]').forEach(el=>{
       el.onclick = ()=>{
         const name = el.dataset.clockItem;
@@ -1828,7 +2002,7 @@ function attachHandlers(){
     const checkClock = document.getElementById('checkClock');
     if(checkClock) checkClock.onclick = finishMission;
   }
-  if(missionState && missionState.id==='party'){
+  if(currentMission && currentMission.type==='assign'){
     document.querySelectorAll('[data-party-task]').forEach(el=>{
       el.onchange = ()=>{
         const i = parseInt(el.dataset.partyTask);
