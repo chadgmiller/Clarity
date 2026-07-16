@@ -8,7 +8,7 @@
   :root{
     --bg:#faf9f6; --card:#ffffff; --ink:#20241f; --muted:#6b7268;
     --accent:#3f6a4e; --accent-soft:#e4ece2; --line:#e7e5dd;
-    --warn:#a8462f; --warn-soft:#f3e7e2; --dot-event:#4f6672;
+    --warn:#a8462f; --warn-soft:#f3e7e2; --dot-event:#4f6672; --dot-list:#7d5a84;
     --shadow: 0 1px 2px rgba(32,36,31,0.05), 0 6px 16px rgba(32,36,31,0.04);
   }
   *{box-sizing:border-box;}
@@ -483,15 +483,18 @@ function getUpcomingQuestSteps(){
   return out.sort((a,b)=>a.diff-b.diff);
 }
 
+const ROW_BORDER = 'border-left:3px solid VAR;padding-left:8px;';
+
 function renderRoutineRow(r, interactive){
   const done = isRoutineDoneToday(r);
+  const border = ROW_BORDER.replace('VAR','var(--accent)');
   if(interactive && activeTimer && activeTimer.routineId===r.id){
     const elapsedSec = Math.max(0, Math.floor((Date.now()-activeTimer.startedAt)/1000));
     const targetSec = r.durationMin*60;
     const pct = Math.min(100, Math.round(elapsedSec/targetSec*100));
     const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
     const ss = String(elapsedSec%60).padStart(2,'0');
-    return `<div class="task-item" style="flex-direction:column;align-items:stretch;gap:6px;">
+    return `<div class="task-item" style="flex-direction:column;align-items:stretch;gap:6px;${border}">
       <div class="row between">
         <div class="flex-fill">${r.icon} ${r.name}</div>
         <div class="muted small" id="timerClock">${mm}:${ss} / ${r.durationMin}:00</div>
@@ -504,15 +507,45 @@ function renderRoutineRow(r, interactive){
     </div>`;
   }
   if(interactive){
-    return `<div class="task-item ${done?'done':''}">
+    return `<div class="task-item ${done?'done':''}" style="${border}">
       <div class="chk" data-routine="${r.id}">${done?'✓':''}</div>
       <div class="flex-fill">${r.icon} ${r.name} ${r.durationMin?`<span class="muted small">(${r.durationMin}+ min)</span>`:''} ${r.streak>0?`<span class="pill streak">${r.streak} day streak</span>`:''}</div>
       ${(r.durationMin && !done) ? `<button class="secondary" data-starttimer="${r.id}">▶ Timer</button>` : ''}
     </div>`;
   }
-  return `<div class="task-item">
+  return `<div class="task-item" style="${border}">
     <div class="flex-fill">${r.icon} ${r.name}${r.durationMin?` <span class="muted small">(${r.durationMin}+ min)</span>`:''}${r.time?` <span class="muted small">${r.time}</span>`:''}</div>
   </div>`;
+}
+
+function renderAdhocRow(a){
+  return `<div class="task-item ${a.done?'done':''}" style="${ROW_BORDER.replace('VAR','var(--warn)')}">
+    <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
+    <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+    <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
+  </div>`;
+}
+
+function renderQuestStepRow(quest, step, diff){
+  const label = diff!==undefined ? (diff<0?'overdue':diff===0?'today':'tomorrow') : null;
+  const overdue = diff!==undefined && diff<0 && !step.done;
+  return `<div class="task-item ${step.done?'done':''}" style="${ROW_BORDER.replace('VAR','var(--dot-event)')}${overdue?'background:var(--warn-soft);':''}">
+    <div class="chk" data-queststep="${quest.id}:${step.id}">${step.done?'✓':''}</div>
+    <div class="flex-fill"><b>${quest.name}</b>: ${step.name} ${label?`<span class="muted small">(${label})</span>`:''}</div>
+  </div>`;
+}
+
+function renderListItemRow(list, item){
+  return `<div class="task-item" style="${ROW_BORDER.replace('VAR','var(--dot-list)')}">
+    <div class="chk" data-listitem="${list.id}:${item.id}"></div>
+    <div class="flex-fill">${item.name} <span class="muted small">(${list.name})</span></div>
+  </div>`;
+}
+
+function hourLabel(h){
+  const period = h<12 ? 'AM' : 'PM';
+  const h12 = h%12===0 ? 12 : h%12;
+  return `${h12} ${period}`;
 }
 
 function renderDay(){
@@ -521,7 +554,11 @@ function renderDay(){
   const isToday = dateStr===todayStr();
   const items = getItemsForDate(dateStr);
   const adhoc = isToday ? getTodayAdhoc() : items.adhoc;
-  const questSteps = isToday ? getUpcomingQuestSteps() : items.questSteps;
+  // Normalize to a consistent {quest,step,diff} shape — diff (due-relative-to-today) is
+  // only meaningful when viewing today, since it's computed against the real "now".
+  const questSteps = isToday
+    ? getUpcomingQuestSteps().map(x=>({quest:x.quest, step:x.step, diff:x.diff}))
+    : items.questSteps.map(x=>({quest:x.quest, step:x.step, diff:undefined}));
   const pendingListItems = [];
   if(isToday){
     state.lists.forEach(l=>{
@@ -529,7 +566,6 @@ function renderDay(){
     });
   }
   const diff = daysUntil(dateStr);
-
   const total = items.routines.length + adhoc.length + questSteps.length + pendingListItems.length;
 
   let html = `<div class="card">
@@ -549,62 +585,50 @@ function renderDay(){
 
   if(total===0){
     html += `<div class="card empty">Nothing planned${isToday?' yet':''}. ${isToday?'Add a routine, list, or event to start earning points.':''}</div>`;
+    if(isToday){ html += `<footer class="tip">Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`; }
+    return html;
   }
 
-  if(adhoc.length){
-    html += `<div class="card"><h3>Don't forget</h3>`;
-    adhoc.forEach(a=>{
-      html += `<div class="task-item ${a.done?'done':''}">
-        <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-        <div class="flex-fill">${a.name} ${a.time?`<span class="muted small">${a.time}</span>`:''} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
-        <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
-      </div>`;
-    });
-    html += `</div>`;
-  }
+  html += `<div class="row small muted" style="gap:16px;margin:2px 4px 10px;">
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:5px;"></span>Routine</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);margin-right:5px;"></span>Reminder</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dot-event);margin-right:5px;"></span>Event step</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dot-list);margin-right:5px;"></span>List item</span>
+  </div>`;
 
-  if(items.routines.length){
-    html += `<div class="card"><h3>Routines</h3>`;
-    items.routines.forEach(r=>{ html += renderRoutineRow(r, isToday); });
-    html += `</div>`;
-  }
+  const timedRoutines = items.routines.filter(r=>r.time);
+  const untimedRoutines = items.routines.filter(r=>!r.time);
+  const timedAdhoc = adhoc.filter(a=>a.time);
+  const untimedAdhoc = adhoc.filter(a=>!a.time);
 
-  if(pendingListItems.length){
-    html += `<div class="card"><h3>Pack &amp; Check</h3>`;
+  // Routines/reminders without a clock time, plus event steps and list items (neither of
+  // which carry time-of-day data at all), live above the hourly grid rather than forcing
+  // them into a slot that would be a guess.
+  const untimedCount = untimedRoutines.length + untimedAdhoc.length + questSteps.length + pendingListItems.length;
+  if(untimedCount){
+    html += `<div class="card"><h3>Anytime today</h3>`;
+    untimedAdhoc.forEach(a=>{ html += renderAdhocRow(a); });
+    untimedRoutines.forEach(r=>{ html += renderRoutineRow(r, isToday); });
     const byList = {};
     pendingListItems.forEach(({list,item})=>{ (byList[list.id]=byList[list.id]||{list,items:[]}).items.push(item); });
-    Object.values(byList).forEach(({list,items})=>{
-      html += `<div class="small muted" style="margin:6px 0 2px;font-weight:700;">${list.name}</div>`;
-      items.forEach(item=>{
-        html += `<div class="task-item">
-          <div class="chk" data-listitem="${list.id}:${item.id}"></div>
-          <div class="flex-fill">${item.name}</div>
-        </div>`;
-      });
-    });
+    Object.values(byList).forEach(({list,items})=>{ items.forEach(item=>{ html += renderListItemRow(list, item); }); });
+    questSteps.forEach(({quest,step,diff})=>{ html += renderQuestStepRow(quest, step, diff); });
     html += `</div>`;
   }
 
-  if(questSteps.length){
-    html += `<div class="card"><h3>Event Steps${isToday?' Due':''}</h3>`;
-    if(isToday){
-      questSteps.forEach(({quest,step,dueStr,diff})=>{
-        const cls = diff<0?'overdue':(diff===0?'today':'');
-        html += `<div class="timeline"><div class="step ${cls}">
-          <div class="chk" data-queststep="${quest.id}:${step.id}"></div>
-          <div class="flex-fill"><b>${quest.name}</b>: ${step.name} <span class="muted small">(${diff<0?'overdue':diff===0?'today':'tomorrow'})</span></div>
-        </div></div>`;
-      });
-    } else {
-      questSteps.forEach(({quest,step})=>{
-        html += `<div class="task-item ${step.done?'done':''}">
-          <div class="chk" data-queststep="${quest.id}:${step.id}">${step.done?'✓':''}</div>
-          <div class="flex-fill"><b>${quest.name}</b>: ${step.name}</div>
-        </div>`;
-      });
-    }
-    html += `</div>`;
+  const byHour = {};
+  timedRoutines.forEach(r=>{ const h=parseInt(r.time.split(':')[0],10); (byHour[h]=byHour[h]||[]).push(renderRoutineRow(r, isToday)); });
+  timedAdhoc.forEach(a=>{ const h=parseInt(a.time.split(':')[0],10); (byHour[h]=byHour[h]||[]).push(renderAdhocRow(a)); });
+
+  html += `<div class="card" style="padding:6px 14px;">`;
+  for(let h=0; h<24; h++){
+    const rows = byHour[h];
+    html += `<div class="row" style="align-items:flex-start;border-bottom:1px solid var(--line);padding:6px 0;gap:10px;">
+      <div class="muted small" style="width:52px;flex:0 0 auto;padding-top:6px;">${hourLabel(h)}</div>
+      <div style="flex:1;min-width:0;">${rows ? rows.join('') : ''}</div>
+    </div>`;
   }
+  html += `</div>`;
 
   if(isToday){
     html += `<footer class="tip">Tip: keep this tab open (or pin it!) so Clarity can pop up reminders.</footer>`;
