@@ -213,7 +213,9 @@ function defaultState(){
     missions:{ completed:{}, claimedDate:null, history:[] }, // claimedDate gates today's challenge to one attempt; history is one entry per claimed day
     routines:[],      // {id,name,icon,days:['Mon',...],time,streak,lastDoneDate}
     lists:[],         // {id,name,items:[{id,name,checked}],lastReset}
-    quests:[],        // {id,name,eventDate,steps:[{id,name,dueOffsetDays,done}]}
+    quests:[],        // {id,name,eventDate,steps:[{id,name,dueOffsetDays,done}]} — eventDate is null for
+                      // dateless "just break it down" projects; those steps have no dueOffsetDays and
+                      // are excluded from date-driven views and the daily point-penalty check
     questTemplates:[],// {id,name,steps:[{id,name,offsetDays}]} — reusable event step plans
     adhoc:[],         // {id,name,date,time,done}
     rewards: DEFAULT_REWARDS.map(r=>({id:uidSafe(), name:r.name, cost:r.cost})),
@@ -471,6 +473,7 @@ function getTodayAdhoc(){
 function getUpcomingQuestSteps(){
   const out = [];
   state.quests.forEach(q=>{
+    if(!q.eventDate) return; // dateless projects never appear in date-driven views
     q.steps.forEach(s=>{
       if(s.done) return;
       const due = new Date(q.eventDate+'T00:00:00');
@@ -709,6 +712,7 @@ function getItemsForDate(dateStr){
   const adhoc = state.adhoc.filter(a=> a.date===dateStr);
   const questSteps = [];
   state.quests.forEach(q=>{
+    if(!q.eventDate) return; // dateless projects never appear on the calendar
     q.steps.forEach(s=>{
       if(questStepDueStr(q,s)===dateStr) questSteps.push({quest:q, step:s});
     });
@@ -1284,44 +1288,57 @@ function renderTemplates(){
 
 /* ============ QUESTS (events) ============ */
 function renderQuests(){
-  let html = `<h2>My Events</h2><p class="muted">Big one-time things — birthday parties, projects, trips. Start blank or from one of your templates, then customize.</p>`;
-  if(state.quests.length===0){ html += `<div class="card empty">No events yet. Start one below!</div>`; }
+  let html = `<h2>My Events</h2><p class="muted">Big one-time things and multi-step projects — birthday parties, trips, or just breaking something down, like "clean my room." Start blank or from one of your templates, then customize.</p>`;
+  if(state.quests.length===0){ html += `<div class="card empty">No events or projects yet. Start one below!</div>`; }
   state.quests.forEach(q=>{
+    const dated = !!q.eventDate;
     const doneCount = q.steps.filter(s=>s.done).length;
-    const diff = daysUntil(q.eventDate);
+    const diff = dated ? daysUntil(q.eventDate) : null;
     html += `<div class="card">
       <div class="row between">
-        <div><b>${q.name}</b> <span class="muted small">(${fmtDate(q.eventDate)}, ${diff===0?'today!':diff+' day(s) away'})</span></div>
+        <div><b>${q.name}</b> <span class="muted small">${dated ? `(${fmtDate(q.eventDate)}, ${diff===0?'today!':diff+' day(s) away'})` : '(no date — just steps)'}</span></div>
         <button class="icon-btn" data-del-quest="${q.id}">✕</button>
       </div>
       <div class="progress-mini">${doneCount}/${q.steps.length} steps done</div>
       <div class="timeline">`;
-    q.steps.forEach(s=>{
-      const due = new Date(q.eventDate+'T00:00:00'); due.setDate(due.getDate()-s.dueOffsetDays);
-      const dueStr = todayStr(due);
-      const stepDiff = daysUntil(dueStr);
-      const cls = s.done? 'done' : (stepDiff<0?'overdue':(stepDiff===0?'today':''));
+    q.steps.forEach((s,i)=>{
+      let cls = s.done ? 'done' : '';
+      let rightSide;
+      if(dated){
+        const due = new Date(q.eventDate+'T00:00:00'); due.setDate(due.getDate()-s.dueOffsetDays);
+        const dueStr = todayStr(due);
+        const stepDiff = daysUntil(dueStr);
+        cls = s.done? 'done' : (stepDiff<0?'overdue':(stepDiff===0?'today':''));
+        rightSide = `<input type="number" min="0" data-queststepoffset="${q.id}:${s.id}" value="${s.dueOffsetDays}" style="width:56px;">
+          <span class="muted small">d before &middot; due ${fmtDate(dueStr)}</span>`;
+      } else {
+        rightSide = `<span class="muted small">Step ${i+1} of ${q.steps.length}</span>`;
+      }
       html += `<div class="step ${cls}">
         <div class="chk" data-queststep="${q.id}:${s.id}">${s.done?'✓':''}</div>
         <input class="flex-fill" data-queststepname="${q.id}:${s.id}" value="${s.name}" style="border:none;background:transparent;padding:4px;font-weight:600;">
-        <input type="number" min="0" data-queststepoffset="${q.id}:${s.id}" value="${s.dueOffsetDays}" style="width:56px;">
-        <span class="muted small">d before &middot; due ${fmtDate(dueStr)}</span>
+        ${rightSide}
         <button class="icon-btn" data-del-queststep="${q.id}:${s.id}">✕</button>
       </div>`;
     });
     html += `</div>
       <div class="row" style="margin-top:8px;">
         <input placeholder="Add a step..." data-newqueststepname-for="${q.id}" style="flex:1;min-width:120px;">
-        <input type="number" min="0" placeholder="days before" data-newqueststepoffset-for="${q.id}" style="width:120px;">
+        ${dated ? `<input type="number" min="0" placeholder="days before" data-newqueststepoffset-for="${q.id}" style="width:120px;">` : ''}
         <button data-addqueststep="${q.id}">Add Step</button>
       </div>
     </div>`;
   });
   html += `<div class="card">
-    <h3>Start a new event</h3>
+    <h3>Start a new event or project</h3>
     <div class="row">
-      <input id="questName" placeholder="e.g. Maya's Birthday Party" style="flex:1;min-width:180px;">
+      <input id="questName" placeholder="e.g. Maya's Birthday Party, or Clean My Room" style="flex:1;min-width:180px;">
       <input id="questDate" type="date">
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <label class="small muted" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="questNoDate" style="width:auto;"> No specific date — just break it into steps
+      </label>
     </div>
     <div class="row" style="margin-top:8px;">
       <select id="questTemplateSelect">
@@ -1330,7 +1347,7 @@ function renderQuests(){
       </select>
     </div>
     <p class="small muted">${state.questTemplates.length? 'Pick a template to start from its steps, or start blank.' : 'No templates yet — create one under Lists → Event Templates, or just start blank and add steps here.'} You can add, remove, rename, or reschedule steps any time.</p>
-    <div style="margin-top:10px;"><button id="addQuestBtn">Create Event</button></div>
+    <div style="margin-top:10px;"><button id="addQuestBtn">Create</button></div>
   </div>`;
   return html;
 }
@@ -1400,6 +1417,7 @@ function renderSettings(){
 // but the deduction is capped at what was actually earned that same day, so a bad
 // day nets to zero at worst and never eats into points already banked.
 function questStepDueStr(q,s){
+  if(!q.eventDate) return null; // dateless projects have no due date to compute
   const due = new Date(q.eventDate+'T00:00:00');
   due.setDate(due.getDate()-s.dueOffsetDays);
   return todayStr(due);
@@ -1433,6 +1451,7 @@ function processDayMisses(dStr){
     }
   });
   state.quests.forEach(q=>{
+    if(!q.eventDate) return; // dateless projects aren't subject to the daily miss/penalty check
     q.steps.forEach(s=>{
       if(questStepDueStr(q,s)===dStr){
         if(s.done){
@@ -1879,19 +1898,28 @@ function attachHandlers(){
   const addQuestBtn = document.getElementById('addQuestBtn');
   if(addQuestBtn) addQuestBtn.onclick = ()=>{
     const name = document.getElementById('questName').value.trim();
+    const noDate = document.getElementById('questNoDate').checked;
     const date = document.getElementById('questDate').value;
-    if(!name || !date){ toast('Add a name and date'); return; }
-    const diff = daysUntil(date);
+    if(!name || (!noDate && !date)){ toast(noDate ? 'Give it a name' : 'Add a name and date'); return; }
     const tplId = document.getElementById('questTemplateSelect').value;
     let steps = [];
     if(tplId){
       const tpl = state.questTemplates.find(t=>t.id===tplId);
       if(tpl){
-        steps = tpl.steps.map(s=>({id:uid(), name:s.name, dueOffsetDays: Math.min(s.offsetDays, Math.max(0,diff)), done:false, penalized:false}));
+        if(noDate){
+          steps = tpl.steps.map(s=>({id:uid(), name:s.name, done:false, penalized:false}));
+        } else {
+          const diff = daysUntil(date);
+          steps = tpl.steps.map(s=>({id:uid(), name:s.name, dueOffsetDays: Math.min(s.offsetDays, Math.max(0,diff)), done:false, penalized:false}));
+        }
       }
     }
-    state.quests.push({id:uid(), name, eventDate:date, steps});
+    state.quests.push({id:uid(), name, eventDate: noDate ? null : date, steps});
     saveState(); render();
+  };
+  const questNoDate = document.getElementById('questNoDate');
+  if(questNoDate) questNoDate.onchange = ()=>{
+    document.getElementById('questDate').disabled = questNoDate.checked;
   };
   document.querySelectorAll('[data-del-quest]').forEach(el=>{
     el.onclick = ()=>{
@@ -1946,13 +1974,17 @@ function attachHandlers(){
       const qId = el.dataset.addqueststep;
       const q = state.quests.find(x=>x.id===qId);
       const nameInput = document.querySelector(`[data-newqueststepname-for="${qId}"]`);
-      const offInput = document.querySelector(`[data-newqueststepoffset-for="${qId}"]`);
       const name = nameInput.value.trim();
       if(!name){ toast('Give the step a name'); return; }
-      const diff = daysUntil(q.eventDate);
-      let off = parseInt(offInput.value); if(isNaN(off)||off<0) off=0;
-      off = Math.min(off, Math.max(0,diff));
-      q.steps.push({id:uid(), name, dueOffsetDays:off, done:false, penalized:false});
+      if(q.eventDate){
+        const offInput = document.querySelector(`[data-newqueststepoffset-for="${qId}"]`);
+        const diff = daysUntil(q.eventDate);
+        let off = parseInt(offInput.value); if(isNaN(off)||off<0) off=0;
+        off = Math.min(off, Math.max(0,diff));
+        q.steps.push({id:uid(), name, dueOffsetDays:off, done:false, penalized:false});
+      } else {
+        q.steps.push({id:uid(), name, done:false, penalized:false});
+      }
       saveState(); render();
     };
   });
