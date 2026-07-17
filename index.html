@@ -596,10 +596,13 @@ function renderQuestStepRow(quest, step, diff){
   }
   const label = diff!==undefined ? (diff<0?'overdue':diff===0?'today':'tomorrow') : null;
   const overdue = diff!==undefined && diff<0 && !step.done;
-  return `<div class="task-item ${step.done?'done':''}" style="${ROW_BORDER.replace('VAR','var(--dot-event)')}${overdue?'background:var(--warn-soft);':''}">
+  const dep = step.dependsOnStepId ? quest.steps.find(x=>x.id===step.dependsOnStepId) : null;
+  const waiting = (dep && !dep.done) ? `<div class="muted small" style="width:100%;">Waiting on: ${dep.name}</div>` : '';
+  return `<div class="task-item ${step.done?'done':''}" style="${ROW_BORDER.replace('VAR','var(--dot-event)')}${overdue?'background:var(--warn-soft);':''}flex-wrap:wrap;">
     <div class="chk" data-queststep="${quest.id}:${step.id}">${step.done?'✓':''}</div>
     <div class="flex-fill"><b>${quest.name}</b>: ${step.name} ${(step.estimatedMin && !step.done)?`<span class="muted small">(~${step.estimatedMin} min)</span>`:''} ${label?`<span class="muted small">(${label})</span>`:''}</div>
     ${(step.estimatedMin && !step.done) ? `<button class="secondary" data-starttimer-queststep="${quest.id}|${step.id}">▶ Timer</button>` : ''}
+    ${waiting}
   </div>`;
 }
 
@@ -1426,12 +1429,20 @@ function renderQuests(){
       } else {
         rightSide = `<span class="muted small">Step ${i+1} of ${q.steps.length}</span>`;
       }
-      html += `<div class="step ${cls}">
+      const dep = s.dependsOnStepId ? q.steps.find(x=>x.id===s.dependsOnStepId) : null;
+      const waitingLabel = (dep && !dep.done) ? `<div class="small muted" style="width:100%;">Waiting on: ${dep.name}</div>` : '';
+      const dependsOptions = q.steps.filter(x=>x.id!==s.id).map(x=>`<option value="${x.id}" ${s.dependsOnStepId===x.id?'selected':''}>${x.name}</option>`).join('');
+      html += `<div class="step ${cls}" style="flex-wrap:wrap;">
         <div class="chk" data-queststep="${q.id}:${s.id}">${s.done?'✓':''}</div>
         <input class="flex-fill" data-queststepname="${q.id}:${s.id}" value="${s.name}" style="border:none;background:transparent;padding:4px;font-weight:600;">
         ${(s.estimatedMin && !s.done) ? `<span class="muted small">~${s.estimatedMin}m</span><button class="secondary" data-starttimer-queststep="${q.id}|${s.id}">▶ Timer</button>` : ''}
         ${rightSide}
+        ${q.steps.length>1 ? `<select data-queststepdepends="${q.id}:${s.id}" style="width:150px;font-size:12px;padding:6px 8px;">
+          <option value="">No dependency</option>
+          ${dependsOptions}
+        </select>` : ''}
         <button class="icon-btn" data-del-queststep="${q.id}:${s.id}">✕</button>
+        ${waitingLabel}
       </div>`;
     });
     html += `</div>
@@ -2095,10 +2106,25 @@ function attachHandlers(){
       const [qId,sId] = el.dataset.queststep.split(':');
       const q = state.quests.find(x=>x.id===qId);
       const s = q.steps.find(x=>x.id===sId);
+      if(!s.done && s.dependsOnStepId){
+        const dep = q.steps.find(x=>x.id===s.dependsOnStepId);
+        if(dep && !dep.done){
+          if(!confirm(`This is waiting on "${dep.name}", which isn't done yet. Check it off anyway?`)) return;
+        }
+      }
       s.done = !s.done;
       saveState();
       if(s.done) celebrate('Event step complete!', 12);
       render();
+    };
+  });
+  document.querySelectorAll('[data-queststepdepends]').forEach(el=>{
+    el.onchange = ()=>{
+      const [qId,sId] = el.dataset.queststepdepends.split(':');
+      const q = state.quests.find(x=>x.id===qId);
+      const s = q.steps.find(x=>x.id===sId);
+      s.dependsOnStepId = el.value || null;
+      saveState(); render();
     };
   });
   document.querySelectorAll('[data-queststepname]').forEach(el=>{
