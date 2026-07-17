@@ -166,6 +166,7 @@ function migrateState(s){
   if(!s.notifiedToday) s.notifiedToday = {};
   if(!s.history) s.history = [];
   if(!s.weeklyReflections) s.weeklyReflections = [];
+  if(!s.priorityPins) s.priorityPins = {date:null, itemKeys:[]};
   return s;
 }
 function saveState(){
@@ -223,7 +224,8 @@ function defaultState(){
     notifications:{enabled:false, lastCheckedMinute:''},
     notifiedToday:{}, // key -> date string, to avoid repeat notifications
     history:[],       // {date,earned,missed,net,completed:[{type,name}],missedItems:[{type,name}]} — last ~90 days
-    weeklyReflections:[] // {weekStartDate,selectedReasons:[...],note,tryNext,tryNextNote}
+    weeklyReflections:[], // {weekStartDate,selectedReasons:[...],note,tryNext,tryNextNote}
+    priorityPins:{date:null, itemKeys:[]} // today's top-1-to-3 focus picks from the untimed list; resets once date!=today
   };
 }
 function uidSafe(){ return Math.random().toString(36).slice(2,10); }
@@ -606,17 +608,55 @@ function renderDay(){
 
   // Routines/reminders without a clock time, plus event steps and list items (neither of
   // which carry time-of-day data at all), live above the hourly grid rather than forcing
-  // them into a slot that would be a guess.
-  const untimedCount = untimedRoutines.length + untimedAdhoc.length + questSteps.length + pendingListItems.length;
-  if(untimedCount){
-    html += `<div class="card"><h3>Anytime today</h3>`;
-    untimedAdhoc.forEach(a=>{ html += renderAdhocRow(a); });
-    untimedRoutines.forEach(r=>{ html += renderRoutineRow(r, isToday); });
-    const byList = {};
-    pendingListItems.forEach(({list,item})=>{ (byList[list.id]=byList[list.id]||{list,items:[]}).items.push(item); });
-    Object.values(byList).forEach(({list,items})=>{ items.forEach(item=>{ html += renderListItemRow(list, item); }); });
-    questSteps.forEach(({quest,step,diff})=>{ html += renderQuestStepRow(quest, step, diff); });
-    html += `</div>`;
+  // them into a slot that would be a guess. Sorted by urgency (overdue, then due today,
+  // then due tomorrow) rather than grouped by type — type is still visible via each row's
+  // color-coded left border.
+  const urgencyItems = [];
+  untimedAdhoc.forEach(a=>{
+    urgencyItems.push({rank: a.date<todayStr()?0:1, key:'a:'+a.id, name:a.name, html:renderAdhocRow(a)});
+  });
+  untimedRoutines.forEach(r=>{
+    urgencyItems.push({rank:2, key:'r:'+r.id, name:r.name, html:renderRoutineRow(r, isToday)});
+  });
+  const byList = {};
+  pendingListItems.forEach(({list,item})=>{ (byList[list.id]=byList[list.id]||{list,items:[]}).items.push(item); });
+  Object.values(byList).forEach(({list,items})=>{
+    items.forEach(item=>{ urgencyItems.push({rank:2, key:'l:'+list.id+':'+item.id, name:item.name, html:renderListItemRow(list, item)}); });
+  });
+  questSteps.forEach(({quest,step,diff})=>{
+    const rank = diff===undefined ? 2 : (diff<0?0:diff===0?1:3);
+    urgencyItems.push({rank, key:'q:'+quest.id+':'+step.id, name:`${quest.name}: ${step.name}`, html:renderQuestStepRow(quest, step, diff)});
+  });
+  urgencyItems.sort((a,b)=>a.rank-b.rank);
+
+  if(urgencyItems.length){
+    const pinsToday = (isToday && state.priorityPins.date===todayStr()) ? state.priorityPins.itemKeys : [];
+    const needsPrompt = isToday && urgencyItems.length>4 && state.priorityPins.date!==todayStr();
+
+    if(needsPrompt){
+      if(pinDraftKeys===null) pinDraftKeys = [];
+      html += `<div class="card">
+        <h3>Pick your top priorities</h3>
+        <p class="small muted">You've got ${urgencyItems.length} things today — pick 1 to 3 to focus on first. Everything else will still be here, just further down.</p>
+        <div>${urgencyItems.map(it=>`<span class="chip ${pinDraftKeys.includes(it.key)?'selected':''}" data-pin-item="${it.key}">${it.name}</span>`).join('')}</div>
+        <div class="row" style="margin-top:12px;">
+          <button class="green" id="savePriorityPins">Set as Today's Focus</button>
+          <button class="secondary" id="skipPriorityPins">Skip for today</button>
+        </div>
+      </div>`;
+    } else if(pinsToday.length){
+      const pinned = pinsToday.map(k=>urgencyItems.find(it=>it.key===k)).filter(Boolean);
+      const rest = urgencyItems.filter(it=>!pinsToday.includes(it.key));
+      html += `<div class="card">
+        <div class="row between"><h3 style="margin:0;">Right now</h3><a class="linklike small" id="clearPriorityPins">Change focus</a></div>
+        ${pinned.map(it=>it.html).join('')}
+      </div>`;
+      if(rest.length){
+        html += `<div class="card"><h3>Later today</h3>${rest.map(it=>it.html).join('')}</div>`;
+      }
+    } else {
+      html += `<div class="card"><h3>Anytime today</h3>${urgencyItems.map(it=>it.html).join('')}</div>`;
+    }
   }
 
   const byHour = {};
@@ -697,6 +737,10 @@ function maybeResetListsForNewDay(){
 /* ============ CALENDAR ============ */
 let calendarViewDate = new Date();
 let calendarSelectedDate = todayStr();
+
+// In-progress selection while the "pick your top priorities" prompt is open; null until
+// she starts tapping chips, committed into state.priorityPins on save/skip.
+let pinDraftKeys = null;
 
 function shiftCalendarDay(delta){
   const d = new Date(calendarSelectedDate+'T00:00:00');
@@ -1791,6 +1835,36 @@ function attachHandlers(){
   if(calNextDay) calNextDay.onclick = ()=> shiftCalendarDay(1);
   const calJumpToday = document.getElementById('calJumpToday');
   if(calJumpToday) calJumpToday.onclick = ()=>{ calendarSelectedDate = todayStr(); calendarViewDate = new Date(); render(); };
+
+  // PRIORITY PINS (Today's Focus)
+  document.querySelectorAll('[data-pin-item]').forEach(el=>{
+    el.onclick = ()=>{
+      if(pinDraftKeys===null) pinDraftKeys = [];
+      const key = el.dataset.pinItem;
+      const idx = pinDraftKeys.indexOf(key);
+      if(idx>=0) pinDraftKeys.splice(idx,1);
+      else if(pinDraftKeys.length<3) pinDraftKeys.push(key);
+      else { toast('Pick up to 3 — tap one to swap it out first.'); return; }
+      render();
+    };
+  });
+  const savePriorityPins = document.getElementById('savePriorityPins');
+  if(savePriorityPins) savePriorityPins.onclick = ()=>{
+    state.priorityPins = {date: todayStr(), itemKeys: (pinDraftKeys||[]).slice()};
+    pinDraftKeys = null;
+    saveState(); render();
+  };
+  const skipPriorityPins = document.getElementById('skipPriorityPins');
+  if(skipPriorityPins) skipPriorityPins.onclick = ()=>{
+    state.priorityPins = {date: todayStr(), itemKeys: []};
+    pinDraftKeys = null;
+    saveState(); render();
+  };
+  const clearPriorityPins = document.getElementById('clearPriorityPins');
+  if(clearPriorityPins) clearPriorityPins.onclick = ()=>{
+    state.priorityPins = {date:null, itemKeys:[]};
+    saveState(); render();
+  };
 
   // WEEKLY REVIEW
   document.querySelectorAll('[data-reason]').forEach(el=>{
