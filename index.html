@@ -270,15 +270,15 @@ function currentRank(){
 function nextRank(){
   return RANKS.find(x=>x.min>state.points.lifetime) || null;
 }
-function toast(msg){
+function toast(msg, ms=2400){
   const t = document.createElement('div');
   t.className='toast'; t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(), 2400);
+  setTimeout(()=>t.remove(), ms);
 }
-function celebrate(msg, points=0){
+function celebrate(msg, points=0, ms){
   if(points) addPoints(points);
-  toast('🎉 '+msg+(points? ` +${points} pts`:''));
+  toast('🎉 '+msg+(points? ` +${points} pts`:''), ms);
 }
 
 /* ============ ROUTER ============ */
@@ -290,44 +290,114 @@ document.addEventListener('click', ()=>{
   if(openNavGroup){ openNavGroup = null; render(); }
 });
 
-/* ============ ROUTINE TIMER (for duration-based routines) ============ */
-let activeTimer = null; // {routineId, startedAt}
-function startTimer(routineId){
-  activeTimer = { routineId, startedAt: Date.now() };
+/* ============ SHARED TIMER (routines with a fixed duration; adhoc reminders and quest
+   steps with an optional time estimate) ============ */
+// Routines have a REQUIRED target (durationMin) and auto-complete when they hit it —
+// the timer is enforcing a practice duration. Adhoc/quest-step estimates are just a
+// guess to compare against reality, so those never auto-complete: she stops the clock
+// herself whenever she's actually done, and we show her guess vs. what really happened.
+let activeTimer = null; // {kind:'routine'|'adhoc'|'queststep', id, startedAt, targetMin}
+function startTimer(kind, id, targetMin){
+  activeTimer = { kind, id, startedAt: Date.now(), targetMin: targetMin || null };
   render();
 }
 function cancelTimer(){
   activeTimer = null;
   render();
 }
-function finishTimer(routineId){
-  const r = state.routines.find(x=>x.id===routineId);
+// A guess that's within a minute either way reads as "on target" rather than nitpicking
+// over rounding; otherwise frames the gap as normal rather than a miss.
+function estimateReadoutMsg(estimatedMin, actualMin){
+  if(!estimatedMin) return null;
+  const diff = actualMin - estimatedMin;
+  if(Math.abs(diff)<=1) return `Right on the money — you guessed ${estimatedMin} min and it took ${actualMin}.`;
+  if(diff>0) return `You guessed ${estimatedMin} min, it took ${actualMin} — totally normal, most people underestimate.`;
+  return `You guessed ${estimatedMin} min, it only took ${actualMin} — quicker than you thought!`;
+}
+function finishTimer(){
+  if(!activeTimer) return;
+  const { kind, id, startedAt } = activeTimer;
+  const elapsedMin = Math.max(1, Math.round((Date.now()-startedAt)/60000));
   activeTimer = null;
-  if(r && r.lastDoneDate!==todayStr()){
-    r.lastDoneDate = todayStr();
-    r.streak = (r.streak||0)+1;
-    saveState();
-    celebrate(`${r.name} done!`, 8);
+
+  if(kind==='routine'){
+    const r = state.routines.find(x=>x.id===id);
+    if(r && r.lastDoneDate!==todayStr()){
+      r.lastDoneDate = todayStr();
+      r.streak = (r.streak||0)+1;
+      saveState();
+      celebrate(`${r.name} done!`, 8);
+    }
+  } else if(kind==='adhoc'){
+    const a = state.adhoc.find(x=>x.id===id);
+    if(a && !a.done){
+      a.done = true;
+      a.actualMin = elapsedMin;
+      saveState();
+      const extra = estimateReadoutMsg(a.estimatedMin, elapsedMin);
+      celebrate(extra || 'Remembered it!', 8, extra?3800:undefined);
+    }
+  } else if(kind==='queststep'){
+    const [qId,sId] = id.split('|');
+    const q = state.quests.find(x=>x.id===qId);
+    const s = q && q.steps.find(x=>x.id===sId);
+    if(s && !s.done){
+      s.done = true;
+      s.actualMin = elapsedMin;
+      saveState();
+      const extra = estimateReadoutMsg(s.estimatedMin, elapsedMin);
+      celebrate(extra || 'Event step complete!', 12, extra?3800:undefined);
+    }
   }
-  if(currentTab==='day') render();
+  // Manual "Done" clicks only ever happen while she's already looking at the timer card
+  // (Day view for routines/adhoc, Day or Events for quest steps), so re-rendering is
+  // always safe there. A routine can also auto-complete in the background from tickTimer
+  // while she's on some other tab entirely — guard against wiping an in-progress form
+  // on that unrelated screen in that one case.
+  if(kind!=='routine' || currentTab==='day') render();
 }
 function tickTimer(){
   if(!activeTimer) return;
-  const r = state.routines.find(x=>x.id===activeTimer.routineId);
-  if(!r){ activeTimer=null; return; }
   const elapsedSec = Math.floor((Date.now()-activeTimer.startedAt)/1000);
-  const targetSec = r.durationMin*60;
-  if(elapsedSec >= targetSec){ finishTimer(r.id); return; }
+  if(activeTimer.kind==='routine' && activeTimer.targetMin && elapsedSec>=activeTimer.targetMin*60){
+    finishTimer(); return;
+  }
   const clockEl = document.getElementById('timerClock');
   const barEl = document.getElementById('timerBarFill');
-  if(clockEl && barEl){
-    const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
-    const ss = String(elapsedSec%60).padStart(2,'0');
-    clockEl.textContent = `${mm}:${ss} / ${r.durationMin}:00`;
-    barEl.style.width = Math.min(100, Math.round(elapsedSec/targetSec*100))+'%';
+  const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
+  const ss = String(elapsedSec%60).padStart(2,'0');
+  if(clockEl){
+    clockEl.textContent = activeTimer.targetMin ? `${mm}:${ss} / ${activeTimer.targetMin}:00` : `${mm}:${ss}`;
+  }
+  if(barEl && activeTimer.targetMin){
+    barEl.style.width = Math.min(100, Math.round(elapsedSec/(activeTimer.targetMin*60)*100))+'%';
   }
 }
 setInterval(tickTimer, 1000);
+// One shared timer card, reused by routines/adhoc/quest-steps — only routines render a
+// progress bar, since only they have a hard target to fill.
+function renderTimerCard(label){
+  const elapsedSec = Math.max(0, Math.floor((Date.now()-activeTimer.startedAt)/1000));
+  const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
+  const ss = String(elapsedSec%60).padStart(2,'0');
+  const target = activeTimer.targetMin;
+  // A progress bar implies a hard requirement to fill, which only routines have — an
+  // estimate is just a reference point, so adhoc/quest-step timers show the plain
+  // elapsed-vs-guess clock (matching tickTimer's per-second update) without the bar.
+  const showBar = activeTimer.kind==='routine' && target;
+  const pct = showBar ? Math.min(100, Math.round(elapsedSec/(target*60)*100)) : null;
+  return `<div class="task-item" style="flex-direction:column;align-items:stretch;gap:6px;">
+    <div class="row between">
+      <div class="flex-fill">${label}</div>
+      <div class="muted small" id="timerClock">${target ? `${mm}:${ss} / ${target}:00` : `${mm}:${ss}`}</div>
+    </div>
+    ${pct!==null ? `<div class="bar-bg"><div class="bar-fill" id="timerBarFill" style="width:${pct}%"></div></div>` : ''}
+    <div class="row">
+      <button class="green" id="finishTimerBtn">✓ Done</button>
+      <button class="secondary" id="cancelTimerBtn">Cancel</button>
+    </div>
+  </div>`;
+}
 
 /* ============ SETUP SCREEN ============ */
 function renderSetup(){
@@ -493,23 +563,8 @@ const ROW_BORDER = 'border-left:3px solid VAR;padding-left:8px;';
 function renderRoutineRow(r, interactive){
   const done = isRoutineDoneToday(r);
   const border = ROW_BORDER.replace('VAR','var(--accent)');
-  if(interactive && activeTimer && activeTimer.routineId===r.id){
-    const elapsedSec = Math.max(0, Math.floor((Date.now()-activeTimer.startedAt)/1000));
-    const targetSec = r.durationMin*60;
-    const pct = Math.min(100, Math.round(elapsedSec/targetSec*100));
-    const mm = String(Math.floor(elapsedSec/60)).padStart(2,'0');
-    const ss = String(elapsedSec%60).padStart(2,'0');
-    return `<div class="task-item" style="flex-direction:column;align-items:stretch;gap:6px;${border}">
-      <div class="row between">
-        <div class="flex-fill">${r.icon} ${r.name}</div>
-        <div class="muted small" id="timerClock">${mm}:${ss} / ${r.durationMin}:00</div>
-      </div>
-      <div class="bar-bg"><div class="bar-fill" id="timerBarFill" style="width:${pct}%"></div></div>
-      <div class="row">
-        <button class="green" data-finish-timer="${r.id}">✓ Done</button>
-        <button class="secondary" data-cancel-timer="${r.id}">Cancel</button>
-      </div>
-    </div>`;
+  if(interactive && activeTimer && activeTimer.kind==='routine' && activeTimer.id===r.id){
+    return renderTimerCard(`${r.icon} ${r.name}`);
   }
   if(interactive){
     return `<div class="task-item ${done?'done':''}" style="${border}">
@@ -524,19 +579,27 @@ function renderRoutineRow(r, interactive){
 }
 
 function renderAdhocRow(a){
+  if(activeTimer && activeTimer.kind==='adhoc' && activeTimer.id===a.id){
+    return renderTimerCard(a.name);
+  }
   return `<div class="task-item ${a.done?'done':''}" style="${ROW_BORDER.replace('VAR','var(--warn)')}">
     <div class="chk" data-adhoc="${a.id}">${a.done?'✓':''}</div>
-    <div class="flex-fill">${a.name} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+    <div class="flex-fill">${a.name} ${(a.estimatedMin && !a.done)?`<span class="muted small">(~${a.estimatedMin} min)</span>`:''} ${a.date<todayStr()?'<span class="muted small">(overdue)</span>':''}</div>
+    ${(a.estimatedMin && !a.done) ? `<button class="secondary" data-starttimer-adhoc="${a.id}">▶ Timer</button>` : ''}
     <button class="icon-btn" data-del-adhoc="${a.id}">✕</button>
   </div>`;
 }
 
 function renderQuestStepRow(quest, step, diff){
+  if(activeTimer && activeTimer.kind==='queststep' && activeTimer.id===quest.id+'|'+step.id){
+    return renderTimerCard(`${quest.name}: ${step.name}`);
+  }
   const label = diff!==undefined ? (diff<0?'overdue':diff===0?'today':'tomorrow') : null;
   const overdue = diff!==undefined && diff<0 && !step.done;
   return `<div class="task-item ${step.done?'done':''}" style="${ROW_BORDER.replace('VAR','var(--dot-event)')}${overdue?'background:var(--warn-soft);':''}">
     <div class="chk" data-queststep="${quest.id}:${step.id}">${step.done?'✓':''}</div>
-    <div class="flex-fill"><b>${quest.name}</b>: ${step.name} ${label?`<span class="muted small">(${label})</span>`:''}</div>
+    <div class="flex-fill"><b>${quest.name}</b>: ${step.name} ${(step.estimatedMin && !step.done)?`<span class="muted small">(~${step.estimatedMin} min)</span>`:''} ${label?`<span class="muted small">(${label})</span>`:''}</div>
+    ${(step.estimatedMin && !step.done) ? `<button class="secondary" data-starttimer-queststep="${quest.id}|${step.id}">▶ Timer</button>` : ''}
   </div>`;
 }
 
@@ -716,9 +779,10 @@ function renderReminders(){
       <input id="newAdhoc" placeholder="e.g. Bring shoes" style="flex:1;min-width:180px;">
       <input type="date" id="newAdhocDate" value="${todayStr()}">
       <input type="time" id="newAdhocTime">
+      <input type="number" min="1" id="newAdhocEstimate" placeholder="Est. min" style="width:100px;">
       <button id="addAdhocBtn">Add</button>
     </div>
-    <p class="muted small" style="margin-top:6px;">Time is optional — set one if you want a pop-up reminder at that moment (needs notifications turned on in Settings).</p>
+    <p class="muted small" style="margin-top:6px;">Time is optional — set one if you want a pop-up reminder at that moment (needs notifications turned on in Settings). Estimate is optional too — guess how long it'll take and you can time yourself when you do it.</p>
   </div>`;
   return html;
 }
@@ -1346,6 +1410,10 @@ function renderQuests(){
       <div class="progress-mini">${doneCount}/${q.steps.length} steps done</div>
       <div class="timeline">`;
     q.steps.forEach((s,i)=>{
+      if(activeTimer && activeTimer.kind==='queststep' && activeTimer.id===q.id+'|'+s.id){
+        html += renderTimerCard(`${q.name}: ${s.name}`);
+        return;
+      }
       let cls = s.done ? 'done' : '';
       let rightSide;
       if(dated){
@@ -1361,6 +1429,7 @@ function renderQuests(){
       html += `<div class="step ${cls}">
         <div class="chk" data-queststep="${q.id}:${s.id}">${s.done?'✓':''}</div>
         <input class="flex-fill" data-queststepname="${q.id}:${s.id}" value="${s.name}" style="border:none;background:transparent;padding:4px;font-weight:600;">
+        ${(s.estimatedMin && !s.done) ? `<span class="muted small">~${s.estimatedMin}m</span><button class="secondary" data-starttimer-queststep="${q.id}|${s.id}">▶ Timer</button>` : ''}
         ${rightSide}
         <button class="icon-btn" data-del-queststep="${q.id}:${s.id}">✕</button>
       </div>`;
@@ -1369,6 +1438,7 @@ function renderQuests(){
       <div class="row" style="margin-top:8px;">
         <input placeholder="Add a step..." data-newqueststepname-for="${q.id}" style="flex:1;min-width:120px;">
         ${dated ? `<input type="number" min="0" placeholder="days before" data-newqueststepoffset-for="${q.id}" style="width:120px;">` : ''}
+        <input type="number" min="1" placeholder="Est. min" data-newqueststepestimate-for="${q.id}" style="width:100px;">
         <button data-addqueststep="${q.id}">Add Step</button>
       </div>
     </div>`;
@@ -1778,8 +1848,10 @@ function attachHandlers(){
     const date = document.getElementById('newAdhocDate').value || todayStr();
     const timeInput = document.getElementById('newAdhocTime');
     const time = (timeInput && timeInput.value) ? timeInput.value : null;
+    const estimateInput = document.getElementById('newAdhocEstimate');
+    const estimatedMin = (estimateInput && estimateInput.value) ? parseInt(estimateInput.value) : null;
     if(!name) return;
-    state.adhoc.push({id:uid(), name, date, time, done:false, penalized:false});
+    state.adhoc.push({id:uid(), name, date, time, estimatedMin, done:false, penalized:false});
     saveState(); render();
   };
   document.querySelectorAll('[data-adhoc]').forEach(el=>{
@@ -1810,16 +1882,31 @@ function attachHandlers(){
     };
   });
 
-  // HOME: routine timer (duration-based routines)
+  // SHARED TIMER: routines (fixed duration), adhoc reminders + quest steps (estimate)
   document.querySelectorAll('[data-starttimer]').forEach(el=>{
-    el.onclick = ()=> startTimer(el.dataset.starttimer);
+    el.onclick = ()=>{
+      const r = state.routines.find(x=>x.id===el.dataset.starttimer);
+      if(r) startTimer('routine', r.id, r.durationMin);
+    };
   });
-  document.querySelectorAll('[data-finish-timer]').forEach(el=>{
-    el.onclick = ()=> finishTimer(el.dataset.finishTimer);
+  document.querySelectorAll('[data-starttimer-adhoc]').forEach(el=>{
+    el.onclick = ()=>{
+      const a = state.adhoc.find(x=>x.id===el.dataset.starttimerAdhoc);
+      if(a) startTimer('adhoc', a.id, a.estimatedMin);
+    };
   });
-  document.querySelectorAll('[data-cancel-timer]').forEach(el=>{
-    el.onclick = ()=> cancelTimer();
+  document.querySelectorAll('[data-starttimer-queststep]').forEach(el=>{
+    el.onclick = ()=>{
+      const [qId,sId] = el.dataset.starttimerQueststep.split('|');
+      const q = state.quests.find(x=>x.id===qId);
+      const s = q && q.steps.find(x=>x.id===sId);
+      if(s) startTimer('queststep', qId+'|'+sId, s.estimatedMin);
+    };
   });
+  const finishTimerBtn = document.getElementById('finishTimerBtn');
+  if(finishTimerBtn) finishTimerBtn.onclick = ()=> finishTimer();
+  const cancelTimerBtn = document.getElementById('cancelTimerBtn');
+  if(cancelTimerBtn) cancelTimerBtn.onclick = ()=> cancelTimer();
 
   // CALENDAR
   const calPrev = document.getElementById('calPrevMonth');
@@ -2050,14 +2137,16 @@ function attachHandlers(){
       const nameInput = document.querySelector(`[data-newqueststepname-for="${qId}"]`);
       const name = nameInput.value.trim();
       if(!name){ toast('Give the step a name'); return; }
+      const estInput = document.querySelector(`[data-newqueststepestimate-for="${qId}"]`);
+      const estimatedMin = (estInput && estInput.value) ? parseInt(estInput.value) : null;
       if(q.eventDate){
         const offInput = document.querySelector(`[data-newqueststepoffset-for="${qId}"]`);
         const diff = daysUntil(q.eventDate);
         let off = parseInt(offInput.value); if(isNaN(off)||off<0) off=0;
         off = Math.min(off, Math.max(0,diff));
-        q.steps.push({id:uid(), name, dueOffsetDays:off, done:false, penalized:false});
+        q.steps.push({id:uid(), name, dueOffsetDays:off, estimatedMin, done:false, penalized:false});
       } else {
-        q.steps.push({id:uid(), name, done:false, penalized:false});
+        q.steps.push({id:uid(), name, estimatedMin, done:false, penalized:false});
       }
       saveState(); render();
     };
